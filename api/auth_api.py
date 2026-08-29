@@ -133,3 +133,89 @@ class DriverAppAuthAPI(http.Controller):
             'biometric_allowed': bool(driver.biometric_allowed),
             'session_expires_at': session.expires_at,
         })
+
+class DriverLoginTestController(http.Controller):
+
+    @http.route(
+        '/api/driver/v1/login_test',
+        type='http',
+        auth='none',
+        methods=['POST'],
+        csrf=False
+    )
+    def driver_login_test(self, **kwargs):
+        import json
+        from odoo import api, registry, SUPERUSER_ID
+        from odoo.http import request
+        from werkzeug.wrappers import Response
+
+        test_db = 'almirabi_2025_test'
+
+        try:
+            payload = json.loads(request.httprequest.get_data(as_text=True) or '{}')
+        except Exception:
+            payload = {}
+
+        login = (payload.get('login') or '').strip()
+        pin = str(payload.get('pin') or '').strip()
+        password = str(payload.get('password') or '').strip()
+        device_name = (payload.get('device_name') or '').strip()
+
+        def respond(body, status):
+            return Response(
+                json.dumps(body, ensure_ascii=False),
+                status=status,
+                content_type='application/json; charset=utf-8'
+            )
+
+        if not login or not (pin or password):
+            return respond({
+                'success': False,
+                'code': 'MISSING_CREDENTIALS',
+                'message': 'login and pin/password are required',
+            }, 400)
+
+        try:
+            reg = registry(test_db)
+            with reg.cursor() as cr:
+                env = api.Environment(cr, SUPERUSER_ID, {})
+                employee = env['hr.employee'].sudo().search([
+                    ('app_access_enabled', '=', True),
+                    ('app_login', '=', login),
+                ], limit=1)
+
+                if not employee:
+                    return respond({
+                        'success': False,
+                        'code': 'INVALID_CREDENTIALS',
+                        'message': 'Invalid login or credentials',
+                    }, 401)
+
+                valid = employee.verify_app_pin(pin) if pin else employee.verify_app_password(password)
+                if not valid:
+                    return respond({
+                        'success': False,
+                        'code': 'INVALID_CREDENTIALS',
+                        'message': 'Invalid login or credentials',
+                    }, 401)
+
+                return respond({
+                    'success': True,
+                    'test_mode': True,
+                    'database': test_db,
+                    'driver': {
+                        'id': employee.id,
+                        'name': employee.name,
+                        'login': employee.app_login,
+                    },
+                    'device_name': device_name,
+                    'message': 'TEST LOGIN OK',
+                }, 200)
+
+        except Exception as exc:
+            return respond({
+                'success': False,
+                'code': 'TEST_LOGIN_ERROR',
+                'message': str(exc),
+            }, 500)
+

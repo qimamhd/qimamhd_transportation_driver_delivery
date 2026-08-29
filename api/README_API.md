@@ -63,3 +63,20 @@
 - الملف الشهري يتم إنشاؤه تلقائيًا عند أول توصيلة، بشرط وجود فرع مرتبط بالسائق أو بمستخدم السائق.
 - إذا الملف الشهري لم يعد `draft` ترجع الخدمة `PERIOD_LOCKED`.
 - جلسة التطبيق صالحة 30 يومًا، ويمكن إلغاؤها عند logout.
+
+
+## TEST ONLY - login without changing dbfilter
+
+POST `/api/driver/v1/login_test`
+
+This route is fixed to database `almirabi_2025_test`.
+
+```json
+{
+  "login": "0539959013",
+  "pin": "1234",
+  "device_name": "Postman Test"
+}
+```
+
+This is a test endpoint only. It must not replace the production login route.
