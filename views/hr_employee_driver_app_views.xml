@@ -42,8 +42,9 @@
                                     confirm="سيتم إيقاف دخول التطبيق ومسح PIN وكلمة المرور المشفرة لهذا السائق. هل تريد الاستمرار؟"/>
                         </group>
 
-                        <label string="ملاحظة: البصمة أو Face ID لا يتم تخزينها في Odoo. التطبيق سيستخدم حماية الجهاز لفتح جلسة دخول محفوظة بأمان."
-                               class="text-muted"/>
+                        <div class="text-muted">
+                            <span>ملاحظة: البصمة أو Face ID لا يتم تخزينها في Odoo. التطبيق سيستخدم حماية الجهاز لفتح جلسة دخول محفوظة بأمان.</span>
+                        </div>
 
                         <field name="app_pin_hash" invisible="1"/>
                         <field name="app_password_hash" invisible="1"/>

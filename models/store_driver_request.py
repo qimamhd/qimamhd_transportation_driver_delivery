@@ -320,7 +320,9 @@ class StoreDriverRequestBatch(models.Model):
                 )
 
             # Any previous review becomes invalid once the file is reopened.
-            rec.request_lines.write({
+            rec.request_lines.with_context(
+                driver_delivery_workflow_write=True
+            ).write({
                 'review_state': 'pending',
                 'reject_reason': False,
             })
@@ -731,11 +733,22 @@ class StoreDriverRequestLine(models.Model):
                         _('لا يمكن تعديل بيانات التوصيلة بعد بدء المراجعة.')
                     )
 
-        if 'review_state' in vals:
+        review_fields = {'review_state', 'reject_reason'}
+        if (
+            review_fields.intersection(vals.keys())
+            and not self.env.context.get('driver_delivery_workflow_write')
+        ):
             for rec in self:
                 if rec.batch_id.state != 'review':
                     raise ValidationError(
-                        _('نتيجة المراجعة يمكن تعديلها فقط أثناء حالة قيد المراجعة.')
+                        _('نتيجة المراجعة وسبب الرفض يمكن تعديلهما فقط أثناء حالة قيد المراجعة.')
+                    )
+
+        if 'admin_notes' in vals:
+            for rec in self:
+                if rec.batch_id.state not in ('review', 'approved'):
+                    raise ValidationError(
+                        _('ملاحظات الإدارة يمكن تعديلها فقط أثناء المراجعة أو بعد الاعتماد.')
                     )
 
         if vals.get('review_state') == 'rejected' and not vals.get('reject_reason'):

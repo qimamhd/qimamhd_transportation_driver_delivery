@@ -48,13 +48,15 @@ class HrEmployeeDriverApp(models.Model):
     app_pin_hash = fields.Char(
         string='PIN Hash',
         copy=False,
-        readonly=True
+        readonly=True,
+        groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
     )
 
     app_password_hash = fields.Char(
         string='Password Hash',
         copy=False,
-        readonly=True
+        readonly=True,
+        groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
     )
 
     biometric_allowed = fields.Boolean(
@@ -109,7 +111,7 @@ class HrEmployeeDriverApp(models.Model):
     def _validate_pin_value(self, pin):
         if pin in (False, None, ''):
             return
-        if not re.match(r'^\\d{4,6}$', str(pin)):
+        if not re.match(r'^\d{4,6}$', str(pin)):
             raise ValidationError(
                 _('PIN يجب أن يتكون من 4 إلى 6 أرقام فقط.')
             )
@@ -138,6 +140,18 @@ class HrEmployeeDriverApp(models.Model):
 
     @api.model
     def create(self, vals):
+        protected_keys = {
+            'app_access_enabled',
+            'app_login',
+            'new_app_pin',
+            'new_app_password',
+            'biometric_allowed',
+            'app_pin_hash',
+            'app_password_hash',
+        }
+        if protected_keys.intersection(vals.keys()):
+            self._check_driver_app_manager()
+
         vals = self._prepare_app_credentials_vals(vals)
         rec = super(HrEmployeeDriverApp, self).create(vals)
         rec._validate_app_access_configuration()
