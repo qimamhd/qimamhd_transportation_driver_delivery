@@ -2,54 +2,62 @@
 <odoo>
     <data>
 
+        <!--
+            مهم:
+            شاشة الموظفين في موديول النقل لا تستخدم hr.view_employee_form كواجهة فعلية،
+            وإنما تستخدم custom_employee_form_view الخاصة بالموديول الأساسي.
+            لذلك هذا الـ inherit مربوط مباشرة بالفورم المخصص الذي يفتحه action_custom_employee_view.
+        -->
         <record id="hr_employee_driver_app_form_inherit" model="ir.ui.view">
             <field name="name">hr.employee.driver.app.form.inherit</field>
             <field name="model">hr.employee</field>
-            <field name="inherit_id" ref="hr.view_employee_form"/>
+            <field name="inherit_id" ref="qimamhd_transportation_v2_13.custom_employee_form_view"/>
             <field name="arch" type="xml">
 
-                <xpath expr="//notebook" position="inside">
-                    <page string="دخول تطبيق السائق"
-                          groups="qimamhd_transportation_driver_delivery.group_driver_request_manager">
+                <xpath expr="//sheet" position="inside">
+                    <notebook>
+                        <page string="تطبيق السائق"
+                              groups="qimamhd_transportation_driver_delivery.group_driver_request_manager">
 
-                        <group>
-                            <group string="بيانات الدخول">
-                                <field name="app_access_enabled"/>
-                                <field name="app_login"
-                                       attrs="{'required':[('app_access_enabled','=',True)]}"/>
-                                <field name="new_app_pin"
-                                       password="True"
-                                       placeholder="4 إلى 6 أرقام"/>
-                                <field name="new_app_password"
-                                       password="True"
-                                       placeholder="6 أحرف أو أكثر"/>
-                                <field name="biometric_allowed"/>
+                            <group>
+                                <group string="بيانات دخول التطبيق">
+                                    <field name="app_access_enabled"/>
+                                    <field name="app_login"
+                                           attrs="{'required':[('app_access_enabled','=',True)]}"/>
+                                    <field name="new_app_pin"
+                                           password="True"
+                                           placeholder="4 إلى 6 أرقام"/>
+                                    <field name="new_app_password"
+                                           password="True"
+                                           placeholder="6 أحرف أو أكثر"/>
+                                    <field name="biometric_allowed"/>
+                                </group>
+
+                                <group string="حالة حساب التطبيق">
+                                    <field name="app_credentials_updated_at" readonly="1"/>
+                                    <field name="app_last_login" readonly="1"/>
+                                    <field name="app_failed_attempts" readonly="1"/>
+                                    <field name="app_locked_until" readonly="1"/>
+                                </group>
                             </group>
 
-                            <group string="حالة الحساب">
-                                <field name="app_credentials_updated_at" readonly="1"/>
-                                <field name="app_last_login" readonly="1"/>
-                                <field name="app_failed_attempts" readonly="1"/>
-                                <field name="app_locked_until" readonly="1"/>
+                            <group>
+                                <button name="action_clear_app_credentials"
+                                        string="إلغاء دخول التطبيق ومسح بيانات الاعتماد"
+                                        type="object"
+                                        class="oe_link"
+                                        confirm="سيتم إيقاف دخول التطبيق ومسح PIN وكلمة المرور المشفرة لهذا السائق. هل تريد الاستمرار؟"/>
                             </group>
-                        </group>
 
-                        <group>
-                            <button name="action_clear_app_credentials"
-                                    string="إلغاء دخول التطبيق ومسح بيانات الاعتماد"
-                                    type="object"
-                                    class="oe_link"
-                                    confirm="سيتم إيقاف دخول التطبيق ومسح PIN وكلمة المرور المشفرة لهذا السائق. هل تريد الاستمرار؟"/>
-                        </group>
+                            <div class="text-muted">
+                                <span>ملاحظة: البصمة أو Face ID لا يتم تخزينها في Odoo. التطبيق يستخدم حماية الجهاز لفتح جلسة الدخول المحفوظة بأمان.</span>
+                            </div>
 
-                        <div class="text-muted">
-                            <span>ملاحظة: البصمة أو Face ID لا يتم تخزينها في Odoo. التطبيق سيستخدم حماية الجهاز لفتح جلسة دخول محفوظة بأمان.</span>
-                        </div>
+                            <field name="app_pin_hash" invisible="1"/>
+                            <field name="app_password_hash" invisible="1"/>
 
-                        <field name="app_pin_hash" invisible="1"/>
-                        <field name="app_password_hash" invisible="1"/>
-
-                    </page>
+                        </page>
+                    </notebook>
                 </xpath>
 
             </field>
