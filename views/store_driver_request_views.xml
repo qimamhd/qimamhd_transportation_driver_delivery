@@ -205,10 +205,10 @@
                     <separator/>
 
                     <group expand="0" string="تجميع حسب">
-                        <filter string="السائق" context="{'group_by':'driver_id'}"/>
-                        <filter string="الشهر" context="{'group_by':'month_name'}"/>
-                        <filter string="السنة" context="{'group_by':'year'}"/>
-                        <filter string="الحالة" context="{'group_by':'state'}"/>
+                        <filter string="السائق" name="group_by_driver" context="{'group_by':'driver_id'}"/>
+                        <filter string="الشهر" name="group_by_month" context="{'group_by':'month_name'}"/>
+                        <filter string="السنة" name="group_by_year" context="{'group_by':'year'}"/>
+                        <filter string="الحالة" name="group_by_state" context="{'group_by':'state'}"/>
                     </group>
                 </search>
             </field>

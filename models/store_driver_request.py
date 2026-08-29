@@ -5,7 +5,7 @@ import re
 import uuid
 
 from odoo import api, fields, models, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 
 
 class TrnspStorePricingLines(models.Model):
@@ -38,7 +38,7 @@ class StoreDriverRequestBatch(models.Model):
         copy=False,
         readonly=True,
         default='/',
-        tracking=True
+        track_visibility='onchange'
     )
 
     driver_id = fields.Many2one(
@@ -46,7 +46,7 @@ class StoreDriverRequestBatch(models.Model):
         string='السائق',
         domain=[('driver_emp', '=', True)],
         required=True,
-        tracking=True
+        track_visibility='onchange'
     )
 
     month_name = fields.Selection([
@@ -62,13 +62,13 @@ class StoreDriverRequestBatch(models.Model):
         ('10', 'اكتوبر'),
         ('11', 'نوفمبر'),
         ('12', 'ديسمبر'),
-    ], string='الشهر', required=True, tracking=True)
+    ], string='الشهر', required=True, track_visibility='onchange')
 
     year = fields.Integer(
         string='السنة',
         required=True,
         default=lambda self: fields.Date.today().year,
-        tracking=True
+        track_visibility='onchange'
     )
 
     company_id = fields.Many2one(
@@ -76,7 +76,7 @@ class StoreDriverRequestBatch(models.Model):
         string='الشركة',
         required=True,
         readonly=True,
-        default=lambda self: self.env.company
+        default=lambda self: self.env.user.company_id
     )
 
     branch_id = fields.Many2one(
@@ -104,7 +104,7 @@ class StoreDriverRequestBatch(models.Model):
         default='draft',
         required=True,
         readonly=True,
-        tracking=True
+        track_visibility='onchange'
     )
 
     line_count = fields.Integer(
@@ -136,7 +136,7 @@ class StoreDriverRequestBatch(models.Model):
         'res.users',
         string='تمت المراجعة بواسطة',
         readonly=True,
-        tracking=True
+        track_visibility='onchange'
     )
     review_date = fields.Datetime(
         string='تاريخ بدء المراجعة',
@@ -146,7 +146,7 @@ class StoreDriverRequestBatch(models.Model):
         'res.users',
         string='تم الاعتماد بواسطة',
         readonly=True,
-        tracking=True
+        track_visibility='onchange'
     )
     approve_date = fields.Datetime(
         string='تاريخ الاعتماد',
@@ -175,6 +175,14 @@ class StoreDriverRequestBatch(models.Model):
                 raise ValidationError(
                     _('السنة غير صحيحة.')
                 )
+
+    def _check_manager(self):
+        if not self.env.user.has_group(
+            'qimamhd_transportation_driver_delivery.group_driver_request_manager'
+        ):
+            raise AccessError(
+                _('ليس لديك صلاحية مدير طلبات تطبيق السائقين لتنفيذ هذه العملية.')
+            )
 
     @api.model
     def create(self, vals):
@@ -313,6 +321,7 @@ class StoreDriverRequestBatch(models.Model):
             })
 
     def action_reopen(self):
+        self._check_manager()
         for rec in self:
             if rec.state not in ('done', 'review', 'approved'):
                 raise ValidationError(
@@ -336,6 +345,7 @@ class StoreDriverRequestBatch(models.Model):
             })
 
     def action_cancel(self):
+        self._check_manager()
         for rec in self:
             if rec.state == 'transferred':
                 raise ValidationError(
@@ -527,7 +537,7 @@ class StoreDriverRequestLine(models.Model):
 
             pricing = self.env['trnsp.store.pricing'].search([
                 ('source_path_id', '=', rec.source_path_id.id)
-            ], limit=1)
+            ])
 
             rec.destination_path_ids = (
                 pricing.pricing_lines.destination_path_id.ids
