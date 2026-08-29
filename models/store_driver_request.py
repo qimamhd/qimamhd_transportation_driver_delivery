@@ -437,7 +437,12 @@ class StoreDriverRequestLine(models.Model):
         'trnsp.cars.areas',
         string='مسار الشحن (المصدر)',
         required=True,
-        domain="[('id','in',source_path_ids)]"
+        domain=lambda self: [
+            ('id', 'in',
+             self.env['trnsp.store.pricing'].sudo().search([
+                 ('source_path_id', '!=', False)
+             ]).mapped('source_path_id').ids)
+        ]
     )
     destination_path_ids = fields.Many2many(
         'trnsp.store.areas',
@@ -447,8 +452,7 @@ class StoreDriverRequestLine(models.Model):
     destination_path_id = fields.Many2one(
         'trnsp.store.areas',
         string='الوجهة',
-        required=True,
-        domain="[('id','in',destination_path_ids)]"
+        required=True
     )
     pricing_line_id = fields.Many2one(
         'trnsp.store.pricing.lines',
@@ -535,7 +539,9 @@ class StoreDriverRequestLine(models.Model):
     ]
 
     def _compute_source_path_ids(self):
-        pricing = self.env['trnsp.store.pricing'].search([])
+        pricing = self.env['trnsp.store.pricing'].sudo().search([
+            ('source_path_id', '!=', False)
+        ])
         allowed_source_ids = pricing.mapped('source_path_id').ids
         for rec in self:
             rec.source_path_ids = [(6, 0, allowed_source_ids)]
@@ -547,12 +553,12 @@ class StoreDriverRequestLine(models.Model):
                 rec.destination_path_ids = False
                 continue
 
-            pricing = self.env['trnsp.store.pricing'].search([
+            pricing = self.env['trnsp.store.pricing'].sudo().search([
                 ('source_path_id', '=', rec.source_path_id.id)
             ])
 
             rec.destination_path_ids = (
-                pricing.pricing_lines.destination_path_id.ids
+                pricing.mapped('pricing_lines.destination_path_id').ids
                 if pricing else False
             )
 
@@ -565,6 +571,42 @@ class StoreDriverRequestLine(models.Model):
         self.allowed_radius = 0.0
         self.gps_distance = 0.0
         self.gps_valid = False
+
+        source_ids = self.env['trnsp.store.pricing'].sudo().search([
+            ('source_path_id', '!=', False)
+        ]).mapped('source_path_id').ids
+
+        destination_ids = []
+        if self.source_path_id:
+            pricing = self.env['trnsp.store.pricing'].sudo().search([
+                ('source_path_id', '=', self.source_path_id.id)
+            ])
+            destination_ids = pricing.mapped(
+                'pricing_lines.destination_path_id'
+            ).ids
+
+        return {
+            'domain': {
+                'source_path_id': [('id', 'in', source_ids)],
+                'destination_path_id': [('id', 'in', destination_ids)],
+            }
+        }
+
+    @api.onchange('product_car_id', 'batch_id')
+    def _onchange_available_source_paths(self):
+        source_ids = self.env['trnsp.store.pricing'].sudo().search([
+            ('source_path_id', '!=', False)
+        ]).mapped('source_path_id').ids
+
+        if self.source_path_id and self.source_path_id.id not in source_ids:
+            self.source_path_id = False
+            self.destination_path_id = False
+
+        return {
+            'domain': {
+                'source_path_id': [('id', 'in', source_ids)],
+            }
+        }
 
     @api.onchange('source_path_id', 'destination_path_id')
     def _onchange_destination_path_id(self):
@@ -582,7 +624,7 @@ class StoreDriverRequestLine(models.Model):
             if not rec.source_path_id or not rec.destination_path_id:
                 continue
 
-            pricing_line = self.env['trnsp.store.pricing.lines'].search([
+            pricing_line = self.env['trnsp.store.pricing.lines'].sudo().search([
                 ('header_id.source_path_id', '=', rec.source_path_id.id),
                 ('destination_path_id', '=', rec.destination_path_id.id),
             ], limit=1)
@@ -723,15 +765,24 @@ class StoreDriverRequestLine(models.Model):
                         _('تاريخ التوصيلة لا ينتمي إلى السنة المحددة في ملف السائق.')
                     )
 
+            if rec.source_path_id:
+                pricing_header = self.env['trnsp.store.pricing'].sudo().search([
+                    ('source_path_id', '=', rec.source_path_id.id)
+                ], limit=1)
+                if not pricing_header:
+                    raise ValidationError(
+                        _('مصدر الشحن المحدد غير موجود في شاشة التسعيرات.')
+                    )
+
             if rec.source_path_id and rec.destination_path_id:
-                pricing_line = self.env['trnsp.store.pricing.lines'].search([
+                pricing_line = self.env['trnsp.store.pricing.lines'].sudo().search([
                     ('header_id.source_path_id', '=', rec.source_path_id.id),
                     ('destination_path_id', '=', rec.destination_path_id.id),
                 ], limit=1)
 
                 if not pricing_line:
                     raise ValidationError(
-                        _('الوجهة المحددة غير مرتبطة بمصدر الشحن المحدد.')
+                        _('الوجهة المحددة غير مرتبطة بمصدر الشحن المحدد في شاشة التسعيرات.')
                     )
 
     @api.model
