@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+
+        <record id="transp_store_pricing_gps_inherit" model="ir.ui.view">
+            <field name="name">trnsp.store.pricing.gps.inherit</field>
+            <field name="model">trnsp.store.pricing</field>
+            <field name="inherit_id"
+                   ref="qimamhd_transportation_v2_13.transp_store_pricing_view"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//field[@name='pricing_lines']/tree/field[@name='gbs_to']"
+                       position="after">
+                    <field name="gps_radius"
+                           string="مجال GPS (متر)"/>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+
+        <record id="hr_employee_driver_app_form_inherit" model="ir.ui.view">
+            <field name="name">hr.employee.driver.app.form.inherit</field>
+            <field name="model">hr.employee</field>
+            <field name="inherit_id" ref="hr.view_employee_form"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//notebook" position="inside">
+                    <page string="دخول تطبيق السائق"
+                          groups="qimamhd_transportation_driver_delivery.group_driver_request_manager">
+
+                        <group>
+                            <group string="بيانات الدخول">
+                                <field name="app_access_enabled"/>
+                                <field name="app_login"
+                                       attrs="{'required':[('app_access_enabled','=',True)]}"/>
+                                <field name="new_app_pin"
+                                       password="True"
+                                       placeholder="4 إلى 6 أرقام"/>
+                                <field name="new_app_password"
+                                       password="True"
+                                       placeholder="6 أحرف أو أكثر"/>
+                                <field name="biometric_allowed"/>
+                            </group>
+
+                            <group string="حالة الحساب">
+                                <field name="app_credentials_updated_at" readonly="1"/>
+                                <field name="app_last_login" readonly="1"/>
+                                <field name="app_failed_attempts" readonly="1"/>
+                                <field name="app_locked_until" readonly="1"/>
+                            </group>
+                        </group>
+
+                        <group>
+                            <button name="action_clear_app_credentials"
+                                    string="إلغاء دخول التطبيق ومسح بيانات الاعتماد"
+                                    type="object"
+                                    class="oe_link"
+                                    confirm="سيتم إيقاف دخول التطبيق ومسح PIN وكلمة المرور المشفرة لهذا السائق. هل تريد الاستمرار؟"/>
+                        </group>
+
+                        <label string="ملاحظة: البصمة أو Face ID لا يتم تخزينها في Odoo. التطبيق سيستخدم حماية الجهاز لفتح جلسة دخول محفوظة بأمان."
+                               class="text-muted"/>
+
+                        <field name="app_pin_hash" invisible="1"/>
+                        <field name="app_password_hash" invisible="1"/>
+
+                    </page>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

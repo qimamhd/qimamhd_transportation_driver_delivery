@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <record id="module_category_driver_mobile_requests" model="ir.module.category">
+            <field name="name">طلبات تطبيق السائقين</field>
+            <field name="sequence">35</field>
+        </record>
+
+        <record id="group_driver_request_reviewer" model="res.groups">
+            <field name="name">مراجع طلبات تطبيق السائقين</field>
+            <field name="category_id" ref="module_category_driver_mobile_requests"/>
+        </record>
+
+        <record id="group_driver_request_manager" model="res.groups">
+            <field name="name">مدير طلبات تطبيق السائقين</field>
+            <field name="category_id" ref="module_category_driver_mobile_requests"/>
+            <field name="implied_ids"
+                   eval="[(4, ref('group_driver_request_reviewer'))]"/>
+        </record>
+
+        <record id="rule_driver_request_batch_company" model="ir.rule">
+            <field name="name">طلبات تطبيق السائقين حسب الشركة</field>
+            <field name="model_id" ref="model_trnsp_store_driver_request_batch"/>
+            <field name="domain_force">[('company_id', 'in', user.company_ids.ids)]</field>
+            <field name="groups"
+                   eval="[(4, ref('group_driver_request_reviewer'))]"/>
+        </record>
+
+        <record id="rule_driver_request_line_company" model="ir.rule">
+            <field name="name">تفاصيل طلبات تطبيق السائقين حسب الشركة</field>
+            <field name="model_id" ref="model_trnsp_store_driver_request_line"/>
+            <field name="domain_force">[('company_id', 'in', user.company_ids.ids)]</field>
+            <field name="groups"
+                   eval="[(4, ref('group_driver_request_reviewer'))]"/>
+        </record>
+
+    </data>
+</odoo>
