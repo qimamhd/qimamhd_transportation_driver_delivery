@@ -174,6 +174,15 @@ class HrEmployeeDriverApp(models.Model):
         vals = self._prepare_app_credentials_vals(vals)
         result = super(HrEmployeeDriverApp, self).write(vals)
         self._validate_app_access_configuration()
+
+        if credentials_changed:
+            sessions = self.env['trnsp.driver.app.session'].sudo().search([
+                ('employee_id', 'in', self.ids),
+                ('revoked', '=', False),
+            ])
+            if sessions:
+                sessions.write({'revoked': True})
+
         return result
 
     def _validate_app_access_configuration(self):
