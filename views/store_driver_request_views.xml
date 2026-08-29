@@ -108,6 +108,7 @@
                                         <field name="product_car_id"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                        <field name="source_path_ids" invisible="1"/>
                                         <field name="source_path_id"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>

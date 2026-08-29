@@ -428,10 +428,16 @@ class StoreDriverRequestLine(models.Model):
         domain="[('car_flag','=',True)]",
         required=True
     )
+    source_path_ids = fields.Many2many(
+        'trnsp.cars.areas',
+        compute='_compute_source_path_ids',
+        string='مصادر الشحن المسموحة'
+    )
     source_path_id = fields.Many2one(
         'trnsp.cars.areas',
         string='مسار الشحن (المصدر)',
-        required=True
+        required=True,
+        domain="[('id','in',source_path_ids)]"
     )
     destination_path_ids = fields.Many2many(
         'trnsp.store.areas',
@@ -527,6 +533,12 @@ class StoreDriverRequestLine(models.Model):
             'تنبيه: هذه التوصيلة تم إرسالها مسبقاً من التطبيق.'
         ),
     ]
+
+    def _compute_source_path_ids(self):
+        pricing = self.env['trnsp.store.pricing'].search([])
+        allowed_source_ids = pricing.mapped('source_path_id').ids
+        for rec in self:
+            rec.source_path_ids = [(6, 0, allowed_source_ids)]
 
     @api.depends('source_path_id')
     def _compute_destination_path_ids(self):
@@ -653,6 +665,20 @@ class StoreDriverRequestLine(models.Model):
         )
         return radius * c
 
+    @api.model
+    def _normalize_request_time_value(self, value):
+        if not value or not isinstance(value, str):
+            return value
+        value = value.strip()
+        match = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', value)
+        if not match:
+            return value
+        hour, minute, second = match.groups()
+        normalized = '%02d:%s' % (int(hour), minute)
+        if second is not None:
+            normalized += ':' + second
+        return normalized
+
     @api.constrains('request_time')
     def _check_request_time(self):
         time_pattern = re.compile(
@@ -710,6 +736,9 @@ class StoreDriverRequestLine(models.Model):
 
     @api.model
     def create(self, vals):
+        if vals.get('request_time'):
+            vals['request_time'] = self._normalize_request_time_value(vals['request_time'])
+
         batch = self.env['trnsp.store.driver.request.batch'].browse(
             vals.get('batch_id')
         )
@@ -725,6 +754,9 @@ class StoreDriverRequestLine(models.Model):
         return rec
 
     def write(self, vals):
+        if vals.get('request_time'):
+            vals['request_time'] = self._normalize_request_time_value(vals['request_time'])
+
         protected_fields = {
             'request_date',
             'request_time',
