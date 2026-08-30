@@ -125,10 +125,25 @@
                                         <field name="allowed_radius" optional="hide" readonly="1"/>
                                         <field name="gps_distance" readonly="1"/>
                                         <field name="gps_valid" readonly="1"/>
-                                        <field name="review_state"
-                                               attrs="{'readonly':[('parent.state','!=','review')]}"/>
+                                        <field name="review_state" readonly="1"/>
                                         <field name="reject_reason"
-                                               attrs="{'readonly':[('parent.state','!=','review')]}"/>
+                                               attrs="{'readonly':[('parent.state','!=','review')], 'invisible':[('review_state','!=','rejected')]}"/>
+                                        <button name="action_accept_line"
+                                                string="قبول"
+                                                type="object"
+                                                class="oe_highlight"
+                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
+                                                attrs="{'invisible':['|','|',('parent.state','!=','review'),('gps_valid','=',False),('review_state','=','accepted')]}"/>
+                                        <button name="action_reject_line"
+                                                string="رفض"
+                                                type="object"
+                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
+                                                attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','rejected')]}"/>
+                                        <button name="action_reset_review_line"
+                                                string="إعادة للمراجعة"
+                                                type="object"
+                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
+                                                attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','pending')]}"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"

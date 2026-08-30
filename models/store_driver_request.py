@@ -527,6 +527,59 @@ class StoreDriverRequestLine(models.Model):
                         'أو بدون إعداد GPS صالح.'
                     )
                 )
+
+    def _check_reviewer_access(self):
+        if not self.env.user.has_group(
+            'qimamhd_transportation_driver_delivery.group_driver_request_reviewer'
+        ):
+            raise AccessError(
+                _('ليس لديك صلاحية مراجعة طلبات تطبيق السائقين.')
+            )
+
+    def action_accept_line(self):
+        self._check_reviewer_access()
+        for rec in self:
+            if rec.batch_id.state != 'review':
+                raise ValidationError(
+                    _('يمكن قبول التوصيلة فقط أثناء حالة قيد المراجعة.')
+                )
+            if not rec.gps_valid:
+                raise ValidationError(
+                    _(
+                        'لا يمكن قبول هذه التوصيلة لأن موقع السائق خارج نطاق GPS '
+                        'المسموح أو لأن إعداد GPS للوجهة غير صالح.'
+                    )
+                )
+            rec.with_context(driver_delivery_workflow_write=True).write({
+                'review_state': 'accepted',
+                'reject_reason': False,
+            })
+        return True
+
+    def action_reject_line(self):
+        self._check_reviewer_access()
+        for rec in self:
+            if rec.batch_id.state != 'review':
+                raise ValidationError(
+                    _('يمكن رفض التوصيلة فقط أثناء حالة قيد المراجعة.')
+                )
+            rec.with_context(driver_delivery_workflow_write=True).write({
+                'review_state': 'rejected',
+            })
+        return True
+
+    def action_reset_review_line(self):
+        self._check_reviewer_access()
+        for rec in self:
+            if rec.batch_id.state != 'review':
+                raise ValidationError(
+                    _('يمكن إعادة التوصيلة للمراجعة فقط أثناء حالة قيد المراجعة.')
+                )
+            rec.with_context(driver_delivery_workflow_write=True).write({
+                'review_state': 'pending',
+                'reject_reason': False,
+            })
+        return True
     reject_reason = fields.Char(
         string='سبب الرفض'
     )
