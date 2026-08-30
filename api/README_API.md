@@ -30,13 +30,13 @@
 
 ```json
 {
-  "login": "0500000000",
-  "pin": "1234",
+  "identification_id": "1234567890",
+  "password": "your-password",
   "device_name": "Samsung A55"
 }
 ```
 
-يمكن إرسال `password` بدل `pin`.
+تسجيل الدخول يعتمد على `hr.employee.identification_id` كاسم مستخدم، وكلمة مرور التطبيق المخزنة بشكل مشفّر.
 
 ## مثال تسجيل توصيلة
 
@@ -73,8 +73,8 @@ This route is fixed to database `almirabi_2025_test`.
 
 ```json
 {
-  "login": "0539959013",
-  "pin": "1234",
+  "identification_id": "1234567890",
+  "password": "your-password",
   "device_name": "Postman Test"
 }
 ```
@@ -92,8 +92,8 @@ All production POST endpoints therefore use `type='json'` and must be called wit
 {
   "jsonrpc": "2.0",
   "params": {
-    "login": "0539959013",
-    "pin": "1234",
+    "identification_id": "1234567890",
+    "password": "your-password",
     "device_name": "Postman Test"
   }
 }

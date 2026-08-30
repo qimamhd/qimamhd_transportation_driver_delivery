@@ -31,11 +31,13 @@ class HrEmployeeDriverApp(models.Model):
         copy=False
     )
 
+    # Legacy field kept for database compatibility only.
+    # Driver-app authentication now uses hr.employee.identification_id.
     app_login = fields.Char(
-        string='اسم الدخول / رقم الجوال',
+        string='اسم الدخول القديم',
         copy=False,
         index=True,
-        help='قيمة فريدة يستخدمها السائق لتسجيل الدخول إلى التطبيق.'
+        help='حقل قديم غير مستخدم في تسجيل دخول تطبيق السائق.'
     )
 
     # Non-stored input fields: plaintext is never persisted in PostgreSQL.
@@ -151,7 +153,6 @@ class HrEmployeeDriverApp(models.Model):
         protected_keys = {
             'branch_id',
             'app_access_enabled',
-            'app_login',
             'new_app_pin',
             'new_app_password',
             'biometric_allowed',
@@ -167,25 +168,28 @@ class HrEmployeeDriverApp(models.Model):
         return rec
 
     def write(self, vals):
-        credentials_changed = any(
+        managed_credentials_changed = any(
             key in vals for key in (
                 'branch_id',
                 'new_app_pin',
                 'new_app_password',
                 'app_access_enabled',
-                'app_login',
                 'biometric_allowed',
             )
         )
+        # identification_id is an HR employee field, so normal HR permissions
+        # continue to control it. If it changes, existing app sessions are
+        # revoked because it is now the driver's login identity.
+        login_identity_changed = 'identification_id' in vals
 
-        if credentials_changed:
+        if managed_credentials_changed:
             self._check_driver_app_manager()
 
         vals = self._prepare_app_credentials_vals(vals)
         result = super(HrEmployeeDriverApp, self).write(vals)
         self._validate_app_access_configuration()
 
-        if credentials_changed:
+        if managed_credentials_changed or login_identity_changed:
             sessions = self.env['trnsp.driver.app.session'].sudo().search([
                 ('employee_id', 'in', self.ids),
                 ('revoked', '=', False),
@@ -210,14 +214,25 @@ class HrEmployeeDriverApp(models.Model):
                     _('يجب تحديد الفرع قبل تفعيل دخول الموظف إلى تطبيق السائق.')
                 )
 
-            if not rec.app_login:
+            if not rec.identification_id:
                 raise ValidationError(
-                    _('يجب تحديد اسم الدخول/رقم الجوال قبل تفعيل دخول التطبيق.')
+                    _('يجب تحديد رقم الهوية للموظف قبل تفعيل دخول تطبيق السائق.')
                 )
 
-            if not rec.app_pin_hash and not rec.app_password_hash:
+            duplicate = self.sudo().search([
+                ('id', '!=', rec.id),
+                ('driver_emp', '=', True),
+                ('app_access_enabled', '=', True),
+                ('identification_id', '=', rec.identification_id),
+            ], limit=1)
+            if duplicate:
                 raise ValidationError(
-                    _('يجب تعيين PIN أو كلمة مرور واحدة على الأقل قبل تفعيل دخول التطبيق.')
+                    _('رقم الهوية مستخدم مسبقًا لحساب سائق آخر مفعّل في التطبيق.')
+                )
+
+            if not rec.app_password_hash:
+                raise ValidationError(
+                    _('يجب تعيين كلمة مرور للتطبيق قبل تفعيل دخول السائق.')
                 )
 
     def verify_app_pin(self, pin):

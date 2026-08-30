@@ -24,11 +24,9 @@
                                     <field name="app_access_enabled"/>
                                     <field name="branch_id"
                                            attrs="{'required':[('app_access_enabled','=',True)]}"/>
-                                    <field name="app_login"
+                                    <field name="identification_id"
+                                           string="رقم الهوية / اسم مستخدم التطبيق"
                                            attrs="{'required':[('app_access_enabled','=',True)]}"/>
-                                    <field name="new_app_pin"
-                                           password="True"
-                                           placeholder="4 إلى 6 أرقام"/>
                                     <field name="new_app_password"
                                            password="True"
                                            placeholder="6 أحرف أو أكثر"/>
@@ -48,7 +46,7 @@
                                         string="إلغاء دخول التطبيق ومسح بيانات الاعتماد"
                                         type="object"
                                         class="oe_link"
-                                        confirm="سيتم إيقاف دخول التطبيق ومسح PIN وكلمة المرور المشفرة لهذا السائق. هل تريد الاستمرار؟"/>
+                                        confirm="سيتم إيقاف دخول التطبيق ومسح كلمة المرور المشفرة لهذا السائق. هل تريد الاستمرار؟"/>
                             </group>
 
                             <div class="text-muted">

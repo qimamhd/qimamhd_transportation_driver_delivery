@@ -23,32 +23,35 @@ class DriverAppAuthAPI(http.Controller):
     )
     def login(self, **kwargs):
         data = read_json_body()
-        login = (data.get('login') or '').strip()
-        pin = data.get('pin')
+        identification_id = (data.get('identification_id') or '').strip()
         password = data.get('password')
         device_name = (data.get('device_name') or '').strip()[:128]
 
-        if not login:
-            return error('LOGIN_REQUIRED', 'اسم الدخول مطلوب.')
-        if pin in (None, '') and password in (None, ''):
+        if not identification_id:
+            return error('IDENTIFICATION_REQUIRED', 'رقم الهوية مطلوب.')
+        if password in (None, ''):
             return error(
-                'CREDENTIAL_REQUIRED',
-                'أرسل PIN أو كلمة المرور.'
+                'PASSWORD_REQUIRED',
+                'كلمة المرور مطلوبة.'
             )
 
-        driver = request.env['hr.employee'].sudo().search([
-            ('app_login', '=', login),
+        drivers = request.env['hr.employee'].sudo().search([
+            ('identification_id', '=', identification_id),
             ('driver_emp', '=', True),
-        ], limit=1)
+            ('app_access_enabled', '=', True),
+        ], limit=2)
 
-        # Do not reveal whether the login exists.
-        if not driver or not driver.app_access_enabled:
+        # Do not reveal whether the identity is missing, disabled, or duplicated.
+        # Duplicated enabled identities are rejected rather than authenticating
+        # an arbitrary employee record.
+        if len(drivers) != 1:
             return error(
                 'INVALID_CREDENTIALS',
                 'بيانات الدخول غير صحيحة.',
                 status=401,
             )
 
+        driver = drivers[0]
         now = fields.Datetime.now()
         if driver.app_locked_until and driver.app_locked_until > now:
             return error(
@@ -57,11 +60,7 @@ class DriverAppAuthAPI(http.Controller):
                 status=423,
             )
 
-        valid = False
-        if pin not in (None, ''):
-            valid = driver.verify_app_pin(pin)
-        elif password not in (None, ''):
-            valid = driver.verify_app_password(password)
+        valid = driver.verify_app_password(password)
 
         if not valid:
             failed = (driver.app_failed_attempts or 0) + 1
@@ -96,7 +95,7 @@ class DriverAppAuthAPI(http.Controller):
             'driver': {
                 'id': driver.id,
                 'name': driver.name,
-                'login': driver.app_login,
+                'identification_id': driver.identification_id,
                 'company_id': driver.company_id.id if driver.company_id else False,
                 'company_name': driver.company_id.name if driver.company_id else False,
                 'biometric_allowed': bool(driver.biometric_allowed),
@@ -127,7 +126,7 @@ class DriverAppAuthAPI(http.Controller):
         return ok({
             'id': driver.id,
             'name': driver.name,
-            'login': driver.app_login,
+            'identification_id': driver.identification_id,
             'company_id': driver.company_id.id if driver.company_id else False,
             'company_name': driver.company_id.name if driver.company_id else False,
             'biometric_allowed': bool(driver.biometric_allowed),
@@ -156,8 +155,7 @@ class DriverLoginTestController(http.Controller):
         except Exception:
             payload = {}
 
-        login = (payload.get('login') or '').strip()
-        pin = str(payload.get('pin') or '').strip()
+        identification_id = (payload.get('identification_id') or '').strip()
         password = str(payload.get('password') or '').strip()
         device_name = (payload.get('device_name') or '').strip()
 
@@ -168,30 +166,32 @@ class DriverLoginTestController(http.Controller):
                 content_type='application/json; charset=utf-8'
             )
 
-        if not login or not (pin or password):
+        if not identification_id or not password:
             return respond({
                 'success': False,
                 'code': 'MISSING_CREDENTIALS',
-                'message': 'login and pin/password are required',
+                'message': 'identification_id and password are required',
             }, 400)
 
         try:
             reg = registry(test_db)
             with reg.cursor() as cr:
                 env = api.Environment(cr, SUPERUSER_ID, {})
-                employee = env['hr.employee'].sudo().search([
+                employees = env['hr.employee'].sudo().search([
                     ('app_access_enabled', '=', True),
-                    ('app_login', '=', login),
-                ], limit=1)
+                    ('driver_emp', '=', True),
+                    ('identification_id', '=', identification_id),
+                ], limit=2)
 
-                if not employee:
+                if len(employees) != 1:
                     return respond({
                         'success': False,
                         'code': 'INVALID_CREDENTIALS',
                         'message': 'Invalid login or credentials',
                     }, 401)
 
-                valid = employee.verify_app_pin(pin) if pin else employee.verify_app_password(password)
+                employee = employees[0]
+                valid = employee.verify_app_password(password)
                 if not valid:
                     return respond({
                         'success': False,
@@ -206,7 +206,7 @@ class DriverLoginTestController(http.Controller):
                     'driver': {
                         'id': employee.id,
                         'name': employee.name,
-                        'login': employee.app_login,
+                        'identification_id': employee.identification_id,
                     },
                     'device_name': device_name,
                     'message': 'TEST LOGIN OK',

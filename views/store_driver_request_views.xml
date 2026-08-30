@@ -50,6 +50,13 @@
                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
                                 attrs="{'invisible':[('state','!=','approved')]}"/>
 
+                        <button name="action_rollback_transfer"
+                                string="التراجع عن التحويل"
+                                type="object"
+                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                                confirm="سيتم حذف تسوية السائق المسودة الناتجة عن هذا الملف وإرجاع الملف إلى حالة معتمد. هل تريد المتابعة؟"
+                                attrs="{'invisible':[('state','!=','transferred')]}"/>
+
                         <button name="action_reopen"
                                 string="إعادة فتح"
                                 type="object"
@@ -91,6 +98,8 @@
                                        attrs="{'invisible':[('approve_user_id','=',False)]}"/>
                                 <field name="approve_date" readonly="1"
                                        attrs="{'invisible':[('approve_date','=',False)]}"/>
+                                <field name="settlement_id" readonly="1"
+                                       attrs="{'invisible':[('settlement_id','=',False)]}"/>
                             </group>
                         </group>
 
