@@ -42,6 +42,13 @@
                             </group>
 
                             <group>
+                                <button name="action_unlock_app_login"
+                                        string="فك قفل دخول التطبيق"
+                                        type="object"
+                                        class="oe_highlight"
+                                        attrs="{'invisible':['&amp;',('app_failed_attempts','=',0),('app_locked_until','=',False)]}"
+                                        confirm="سيتم تصفير محاولات الدخول الفاشلة وإلغاء القفل الحالي فقط، دون تغيير كلمة المرور أو بيانات الدخول. هل تريد الاستمرار؟"/>
+
                                 <button name="action_clear_app_credentials"
                                         string="إلغاء دخول التطبيق ومسح بيانات الاعتماد"
                                         type="object"

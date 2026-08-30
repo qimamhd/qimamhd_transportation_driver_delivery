@@ -265,6 +265,15 @@ class HrEmployeeDriverApp(models.Model):
         except Exception:
             return False
 
+    def action_unlock_app_login(self):
+        """Manager-only manual unlock without changing credentials or sessions."""
+        self._check_driver_app_manager()
+        self.write({
+            'app_failed_attempts': 0,
+            'app_locked_until': False,
+        })
+        return True
+
     def action_clear_app_credentials(self):
         self._check_driver_app_manager()
         self.write({
