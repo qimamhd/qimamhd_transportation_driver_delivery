@@ -17,6 +17,14 @@ _APP_PASSWORD_CONTEXT = CryptContext(
 class HrEmployeeDriverApp(models.Model):
     _inherit = 'hr.employee'
 
+    branch_id = fields.Many2one(
+        'custom.branches',
+        string='الفرع',
+        default=lambda self: self.env.user.branch_id
+        if 'branch_id' in self.env.user._fields else False,
+        help='الفرع التشغيلي للسائق. يستخدمه تطبيق السائق عند إنشاء ملف التوصيلات الشهري.'
+    )
+
     app_access_enabled = fields.Boolean(
         string='السماح بالدخول لتطبيق السائق',
         default=False,
@@ -141,6 +149,7 @@ class HrEmployeeDriverApp(models.Model):
     @api.model
     def create(self, vals):
         protected_keys = {
+            'branch_id',
             'app_access_enabled',
             'app_login',
             'new_app_pin',
@@ -160,6 +169,7 @@ class HrEmployeeDriverApp(models.Model):
     def write(self, vals):
         credentials_changed = any(
             key in vals for key in (
+                'branch_id',
                 'new_app_pin',
                 'new_app_password',
                 'app_access_enabled',
@@ -193,6 +203,11 @@ class HrEmployeeDriverApp(models.Model):
             if not rec.driver_emp:
                 raise ValidationError(
                     _('لا يمكن تفعيل دخول التطبيق إلا لموظف معرف كسائق.')
+                )
+
+            if not rec.branch_id:
+                raise ValidationError(
+                    _('يجب تحديد الفرع قبل تفعيل دخول الموظف إلى تطبيق السائق.')
                 )
 
             if not rec.app_login:

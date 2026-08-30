@@ -22,6 +22,8 @@
                             <group>
                                 <group string="بيانات دخول التطبيق">
                                     <field name="app_access_enabled"/>
+                                    <field name="branch_id"
+                                           attrs="{'required':[('app_access_enabled','=',True)]}"/>
                                     <field name="app_login"
                                            attrs="{'required':[('app_access_enabled','=',True)]}"/>
                                     <field name="new_app_pin"
