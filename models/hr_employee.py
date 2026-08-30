@@ -187,7 +187,13 @@ class HrEmployeeDriverApp(models.Model):
 
         vals = self._prepare_app_credentials_vals(vals)
         result = super(HrEmployeeDriverApp, self).write(vals)
-        self._validate_app_access_configuration()
+
+        # Validate the driver-app configuration only when configuration or
+        # login identity fields are actually changed. Runtime login metadata
+        # (failed attempts, lock time, last login) must never turn an invalid
+        # credential attempt into an Odoo ValidationError/500 response.
+        if managed_credentials_changed or login_identity_changed:
+            self._validate_app_access_configuration()
 
         if managed_credentials_changed or login_identity_changed:
             sessions = self.env['trnsp.driver.app.session'].sudo().search([
