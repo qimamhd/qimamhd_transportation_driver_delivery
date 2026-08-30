@@ -64,7 +64,7 @@ class DriverAppDeliveryAPI(http.Controller):
 
     @http.route(
         '/api/driver/v1/deliveries',
-        type='http', auth='public', methods=['POST'], csrf=False
+        type='json', auth='public', methods=['POST'], csrf=False
     )
     def create_delivery(self, **kwargs):
         auth, response = authenticate_driver()
@@ -236,7 +236,7 @@ class DriverAppDeliveryAPI(http.Controller):
 
     @http.route(
         '/api/driver/v1/complete-period',
-        type='http', auth='public', methods=['POST'], csrf=False
+        type='json', auth='public', methods=['POST'], csrf=False
     )
     def complete_period(self, **kwargs):
         auth, response = authenticate_driver()

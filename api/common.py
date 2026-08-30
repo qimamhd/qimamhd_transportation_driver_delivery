@@ -8,7 +8,21 @@ from odoo.http import request
 from werkzeug.wrappers import Response
 
 
+def _is_json_request():
+    # Odoo 13 chooses JsonRequest from Content-Type before matching the route.
+    # POST endpoints therefore use type='json'. In that mode controller methods
+    # must return Python data, not a Werkzeug Response.
+    return request.httprequest.mimetype == 'application/json'
+
+
 def json_response(data, status=200):
+    if _is_json_request():
+        # Odoo's JsonRequest will wrap this value in its JSON-RPC response.
+        # Keep the business/API status in the payload as HTTP status codes are
+        # not propagated by Odoo's type='json' dispatcher.
+        if isinstance(data, dict):
+            data.setdefault('http_status', status)
+        return data
     body = json.dumps(data, ensure_ascii=False, default=str)
     return Response(
         body,
@@ -40,6 +54,15 @@ def error(code, message, status=400, details=None):
 
 
 def read_json_body():
+    # For Odoo type='json', clients send JSON-RPC:
+    # {"jsonrpc":"2.0","params":{...}}. Odoo exposes params to the
+    # controller, while request.jsonrequest keeps the complete request.
+    data = getattr(request, 'jsonrequest', None)
+    if isinstance(data, dict):
+        params = data.get('params')
+        if isinstance(params, dict):
+            return params
+        return data
     data = request.httprequest.get_json(silent=True)
     return data if isinstance(data, dict) else {}
 

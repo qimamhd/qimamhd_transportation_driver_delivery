@@ -80,3 +80,26 @@ This route is fixed to database `almirabi_2025_test`.
 ```
 
 This is a test endpoint only. It must not replace the production login route.
+
+
+## Odoo 13 JSON POST format (v13.0.4.0.3)
+
+Odoo 13 selects the request dispatcher from `Content-Type` before route matching.
+All production POST endpoints therefore use `type='json'` and must be called with
+`Content-Type: application/json` using a JSON-RPC envelope. Example login:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "params": {
+    "login": "0539959013",
+    "pin": "1234",
+    "device_name": "Postman Test"
+  }
+}
+```
+
+POST endpoints: `/login`, `/logout`, `/deliveries`, `/complete-period`.
+GET endpoints remain normal HTTP GET endpoints and return plain JSON.
+The temporary `/login_test` route remains `type='http'` for isolated test-database
+diagnostics only and must be removed before production deployment.

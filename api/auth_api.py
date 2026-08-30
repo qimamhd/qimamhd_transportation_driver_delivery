@@ -19,7 +19,7 @@ class DriverAppAuthAPI(http.Controller):
 
     @http.route(
         '/api/driver/v1/login',
-        type='http', auth='public', methods=['POST'], csrf=False
+        type='json', auth='public', methods=['POST'], csrf=False
     )
     def login(self, **kwargs):
         data = read_json_body()
@@ -105,7 +105,7 @@ class DriverAppAuthAPI(http.Controller):
 
     @http.route(
         '/api/driver/v1/logout',
-        type='http', auth='public', methods=['POST'], csrf=False
+        type='json', auth='public', methods=['POST'], csrf=False
     )
     def logout(self, **kwargs):
         auth, response = authenticate_driver()
