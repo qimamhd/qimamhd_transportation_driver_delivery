@@ -67,7 +67,10 @@ class DriverAppAuthAPI(http.Controller):
             vals = {'app_failed_attempts': failed}
             if failed >= 5:
                 vals.update({
-                    'app_failed_attempts': 0,
+                    # Keep the failed-attempt count visible while the account is
+                    # locked. The manager unlock action (or a successful login
+                    # after the lock expires) is responsible for resetting it.
+                    'app_failed_attempts': failed,
                     'app_locked_until': now + timedelta(minutes=15),
                 })
             driver.sudo().write(vals)
