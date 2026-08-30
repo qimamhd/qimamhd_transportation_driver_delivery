@@ -43,6 +43,13 @@
                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
                                 attrs="{'invisible':[('state','!=','review')]}"/>
 
+                        <button name="action_transfer_to_settlement"
+                                string="تحويل إلى تسوية السائق"
+                                type="object"
+                                class="oe_highlight"
+                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                                attrs="{'invisible':[('state','!=','approved')]}"/>
+
                         <button name="action_reopen"
                                 string="إعادة فتح"
                                 type="object"

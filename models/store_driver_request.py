@@ -3,6 +3,8 @@
 import math
 import re
 import uuid
+import calendar
+from datetime import date
 
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, ValidationError
@@ -319,6 +321,192 @@ class StoreDriverRequestBatch(models.Model):
                 'approve_user_id': self.env.user.id,
                 'approve_date': fields.Datetime.now(),
             })
+
+    def action_transfer_to_settlement(self):
+        """Transfer accepted app deliveries to the legacy driver settlement as DRAFT only."""
+        self._check_manager()
+        Settlement = self.env['trnsp.store.drivers.requests']
+        SettlementLine = self.env['trnsp.store.drivers.requests.lines']
+
+        for rec in self:
+            if rec.state != 'approved':
+                raise ValidationError(
+                    _('يمكن التحويل إلى تسوية السائق فقط بعد اعتماد الملف.')
+                )
+
+            accepted = rec.request_lines.filtered(
+                lambda line: line.review_state == 'accepted'
+            )
+            if not accepted:
+                raise ValidationError(_('لا توجد توصيلات مقبولة للتحويل.'))
+
+            invalid = accepted.filtered(lambda line: not line.gps_valid)
+            if invalid:
+                raise ValidationError(
+                    _('لا يمكن التحويل لأن هناك توصيلة مقبولة خارج نطاق GPS.')
+                )
+
+            # Idempotency: only lines that have never been linked are eligible.
+            pending_transfer = accepted.filtered(
+                lambda line: not line.transferred
+                and not line.settlement_id
+                and not line.settlement_line_id
+            )
+            inconsistent = accepted.filtered(
+                lambda line: (line.transferred or line.settlement_id or line.settlement_line_id)
+                and not (line.transferred and line.settlement_id and line.settlement_line_id)
+            )
+            if inconsistent:
+                raise ValidationError(
+                    _('توجد توصيلات بحالة تحويل غير مكتملة. أوقف التحويل وراجع البيانات قبل المتابعة.')
+                )
+
+            if not pending_transfer:
+                # Defensive idempotency if the header state was changed externally.
+                rec.write({
+                    'state': 'transferred',
+                    'transfer_date': rec.transfer_date or fields.Datetime.now(),
+                })
+                continue
+
+            # The legacy settlement header has one car and one source and its SQL
+            # constraint allows only one active settlement per driver/month/state.
+            # Never guess how to split incompatible deliveries.
+            combos = set(
+                (line.product_car_id.id, line.source_path_id.id)
+                for line in pending_transfer
+            )
+            if len(combos) != 1:
+                raise ValidationError(
+                    _(
+                        'التوصيلات المقبولة تحتوي على أكثر من سيارة أو أكثر من مسار شحن. '
+                        'شاشة تسوية السائق الحالية لا تسمح بتحويلها بأمان في ملف واحد. '
+                        'لم يتم إنشاء أي تسوية.'
+                    )
+                )
+
+            car_id, source_id = next(iter(combos))
+            month_no = int(rec.month_name)
+            last_day = calendar.monthrange(rec.year, month_no)[1]
+            from_date = date(rec.year, month_no, 1)
+            to_date = date(rec.year, month_no, last_day)
+
+            # Detect any existing non-cancelled settlement for this driver/month.
+            # Reuse it only when it is still draft and matches car/source.
+            existing = Settlement.search([
+                ('driver_id', '=', rec.driver_id.id),
+                ('to_date', '=', fields.Date.to_string(to_date)),
+                ('state', '!=', 'cancel'),
+            ])
+            if len(existing) > 1:
+                raise ValidationError(
+                    _('يوجد أكثر من كشف تسوية فعال لنفس السائق والشهر. لم يتم التحويل.')
+                )
+
+            if existing:
+                settlement = existing[0]
+                if settlement.state != 'draft':
+                    raise ValidationError(
+                        _('توجد تسوية سابقة لنفس السائق والشهر وليست مسودة. لم يتم تعديلها.')
+                    )
+                if (
+                    settlement.product_car_id.id != car_id
+                    or settlement.source_path_id.id != source_id
+                ):
+                    raise ValidationError(
+                        _(
+                            'توجد تسوية مسودة لنفس السائق والشهر ولكن بسيارة أو مسار شحن مختلف. '
+                            'لم يتم تعديل التسوية الحالية.'
+                        )
+                    )
+            else:
+                # The legacy create() reads vals['seq'] before super(), therefore
+                # provide it explicitly to avoid a KeyError in programmatic creation.
+                settlement = Settlement.create({
+                    'seq': Settlement._get_sequence(),
+                    'driver_id': rec.driver_id.id,
+                    'product_car_id': car_id,
+                    'source_path_id': source_id,
+                    'from_date': fields.Date.to_string(from_date),
+                    'to_date': fields.Date.to_string(to_date),
+                    'month_name': rec.month_name,
+                    'company_id': rec.company_id.id,
+                    'branch_id': rec.branch_id.id,
+                    'state': 'draft',
+                })
+
+            # Group only this batch's untransferred accepted deliveries by destination.
+            destinations = {}
+            for line in pending_transfer:
+                destinations.setdefault(line.destination_path_id.id, self.env['trnsp.store.driver.request.line'])
+                destinations[line.destination_path_id.id] |= line
+
+            for destination_id, source_lines in destinations.items():
+                pricing_lines = source_lines.mapped('pricing_line_id')
+                if not pricing_lines or len(pricing_lines) != 1:
+                    raise ValidationError(
+                        _('تعذر تحديد تسعيرة واحدة للوجهة أثناء التحويل. لم يتم التحويل.')
+                    )
+                pricing = pricing_lines[0]
+                if (
+                    pricing.destination_path_id.id != destination_id
+                    or pricing.header_id.source_path_id.id != source_id
+                ):
+                    raise ValidationError(
+                        _('إعداد التسعير لا يطابق مسار الشحن والوجهة. لم يتم التحويل.')
+                    )
+
+                qty = len(source_lines)
+                settlement_line = SettlementLine.search([
+                    ('header_id', '=', settlement.id),
+                    ('product_car_id', '=', car_id),
+                    ('destination_path_id', '=', destination_id),
+                ], limit=1)
+
+                distance_km = pricing.distination_km or 0.0
+                km_driven = qty * distance_km
+                km_diesel = rec.branch_id.km_diesel or 0.0
+                diesel = (km_driven / km_diesel) if km_diesel else 0.0
+
+                if settlement_line:
+                    new_qty = settlement_line.quantity + qty
+                    new_km_driven = new_qty * distance_km
+                    new_diesel = (new_km_driven / km_diesel) if km_diesel else 0.0
+                    settlement_line.write({
+                        'quantity': new_qty,
+                        'distination_km': distance_km,
+                        'km_price': pricing.price or 0.0,
+                        'delivered_price': pricing.delivered_price or 0.0,
+                        'km_driven': new_km_driven,
+                        'diesel_fuel_consum': new_diesel,
+                    })
+                else:
+                    settlement_line = SettlementLine.create({
+                        'header_id': settlement.id,
+                        'product_car_id': car_id,
+                        'destination_path_id': destination_id,
+                        'quantity': qty,
+                        'distination_km': distance_km,
+                        'km_price': pricing.price or 0.0,
+                        'delivered_price': pricing.delivered_price or 0.0,
+                        'km_driven': km_driven,
+                        'diesel_fuel_consum': diesel,
+                    })
+
+                source_lines.write({
+                    'settlement_id': settlement.id,
+                    'settlement_line_id': settlement_line.id,
+                    'transferred': True,
+                })
+
+            # Do not call confirm_btn or any accounting action. The accountant
+            # receives a normal legacy settlement in DRAFT and continues manually.
+            rec.write({
+                'state': 'transferred',
+                'transfer_date': fields.Datetime.now(),
+            })
+
+        return True
 
     def action_reopen(self):
         self._check_manager()
