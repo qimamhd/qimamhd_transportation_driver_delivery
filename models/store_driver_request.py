@@ -501,6 +501,32 @@ class StoreDriverRequestLine(models.Model):
         default='pending',
         required=True
     )
+
+    @api.onchange('review_state')
+    def _onchange_review_state_gps_guard(self):
+        for rec in self:
+            if rec.review_state == 'accepted' and not rec.gps_valid:
+                rec.review_state = 'pending'
+                return {
+                    'warning': {
+                        'title': _('لا يمكن قبول التوصيلة'),
+                        'message': _(
+                            'هذه التوصيلة خارج نطاق GPS أو لا تحتوي على إعداد GPS صالح. '
+                            'يجب رفضها أو تصحيح بيانات الموقع قبل قبولها.'
+                        ),
+                    }
+                }
+
+    @api.constrains('review_state', 'gps_valid')
+    def _check_accepted_requires_valid_gps(self):
+        for rec in self:
+            if rec.review_state == 'accepted' and not rec.gps_valid:
+                raise ValidationError(
+                    _(
+                        'لا يمكن حفظ التوصيلة كمقبولة لأنها خارج نطاق GPS '
+                        'أو بدون إعداد GPS صالح.'
+                    )
+                )
     reject_reason = fields.Char(
         string='سبب الرفض'
     )
