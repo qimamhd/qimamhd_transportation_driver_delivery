@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import re
+
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import ValidationError
@@ -17,6 +19,24 @@ from .common import (
 
 
 class DriverAppDeliveryAPI(http.Controller):
+
+    @staticmethod
+    def _normalize_and_validate_time(value):
+        """Return normalized HH:MM[:SS] or False when the value is invalid."""
+        if not isinstance(value, str):
+            return False
+        value = value.strip()
+        match = re.match(
+            r'^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$',
+            value
+        )
+        if not match:
+            return False
+        hour, minute, second = match.groups()
+        normalized = '%02d:%s' % (int(hour), minute)
+        if second is not None:
+            normalized += ':' + second
+        return normalized
 
     def _get_or_create_batch(self, driver, request_date):
         month = '%02d' % request_date.month
@@ -113,12 +133,29 @@ class DriverAppDeliveryAPI(http.Controller):
             car_id = int_value(data.get('car_id'), 'car_id')
             latitude = float_value(data.get('latitude'), 'latitude')
             longitude = float_value(data.get('longitude'), 'longitude')
-            request_date = fields.Date.from_string(data.get('date'))
         except (ValueError, TypeError) as exc:
             return error('INVALID_INPUT', str(exc))
 
+        try:
+            request_date = fields.Date.from_string(data.get('date'))
+        except (ValueError, TypeError):
+            return error(
+                'INVALID_DATE',
+                'التاريخ غير صحيح. استخدم الصيغة YYYY-MM-DD.'
+            )
         if not request_date:
-            return error('INVALID_DATE', 'صيغة التاريخ غير صحيحة. استخدم YYYY-MM-DD.')
+            return error(
+                'INVALID_DATE',
+                'التاريخ غير صحيح. استخدم الصيغة YYYY-MM-DD.'
+            )
+
+        request_time = self._normalize_and_validate_time(data.get('time'))
+        if not request_time:
+            return error(
+                'INVALID_TIME',
+                'الوقت غير صحيح. استخدم HH:MM أو HH:MM:SS.'
+            )
+
         if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
             return error('INVALID_GPS', 'إحداثيات السائق خارج النطاق الصحيح.')
 
@@ -159,7 +196,7 @@ class DriverAppDeliveryAPI(http.Controller):
                 'batch_id': batch.id,
                 'mobile_uuid': mobile_uuid,
                 'request_date': request_date,
-                'request_time': data.get('time'),
+                'request_time': request_time,
                 'product_car_id': car.id,
                 'source_path_id': source_id,
                 'destination_path_id': destination_id,
@@ -262,6 +299,14 @@ class DriverAppDeliveryAPI(http.Controller):
         ], limit=1)
         if not batch:
             return error('BATCH_NOT_FOUND', 'لا يوجد ملف لهذا الشهر.', status=404)
+        if batch.state == 'done':
+            return ok({
+                'batch_id': batch.id,
+                'batch_name': batch.name,
+                'state': batch.state,
+                'already_completed': True,
+            }, message='ملف الشهر مكتمل مسبقًا.')
+
         if batch.state != 'draft':
             return error(
                 'PERIOD_LOCKED',
@@ -279,4 +324,5 @@ class DriverAppDeliveryAPI(http.Controller):
             'batch_id': batch.id,
             'batch_name': batch.name,
             'state': batch.state,
+            'already_completed': False,
         }, message='تم إكمال ملف الشهر وإقفاله عن استقبال توصيلات جديدة.')

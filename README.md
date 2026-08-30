@@ -22,3 +22,10 @@ python3 tools/preflight_check.py
 The script checks Python compilation, XML parsing, Odoo 13 label rules, XPath syntax, duplicate XML IDs, manifest data paths, access CSV structure, object-button methods, the base-module dependency, and stale technical-module references.
 
 A final install/upgrade on an Odoo 13 test database is still required because inherited views and external IDs are resolved by the live Odoo registry.
+
+
+## 13.0.4.0.5
+- Validate and normalize delivery time before period-lock checks; invalid time returns `INVALID_TIME`.
+- Invalid delivery dates now return a clear Arabic `INVALID_DATE` response.
+- Repeating `complete-period` for an already completed batch is idempotent and returns success with `already_completed=true`.
+- Prevent accepting a delivery line when GPS is invalid; rejection remains available for review.

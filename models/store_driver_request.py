@@ -844,6 +844,16 @@ class StoreDriverRequestLine(models.Model):
                         _('ملاحظات الإدارة يمكن تعديلها فقط أثناء المراجعة أو بعد الاعتماد.')
                     )
 
+        if vals.get('review_state') == 'accepted':
+            invalid_gps = self.filtered(lambda rec: not rec.gps_valid)
+            if invalid_gps:
+                raise ValidationError(
+                    _(
+                        'لا يمكن قبول توصيلة خارج نطاق GPS أو بدون إعداد GPS. '
+                        'ارفض التوصيلة أو صحح إعدادات الموقع أولاً.'
+                    )
+                )
+
         if vals.get('review_state') == 'rejected' and not vals.get('reject_reason'):
             # Inline tree may send the reason in a separate write; final approval
             # still enforces it, so do not block the first selection change.
