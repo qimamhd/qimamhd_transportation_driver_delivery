@@ -23,6 +23,38 @@ from .common import (
 class DriverAppDeliveryAPI(http.Controller):
 
     @staticmethod
+    def _many2one_value(record):
+        if not record:
+            return None
+        return {
+            'id': record.id,
+            'name': record.display_name or '',
+        }
+
+    @classmethod
+    def _serialize_batch_line(cls, line):
+        return {
+            'id': line.id,
+            'mobile_uuid': line.mobile_uuid or '',
+            'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
+            'request_time': line.request_time or '',
+            'car': cls._many2one_value(line.product_car_id),
+            'source': cls._many2one_value(line.source_path_id),
+            'destination': cls._many2one_value(line.destination_path_id),
+            'driver_latitude': line.driver_latitude,
+            'driver_longitude': line.driver_longitude,
+            'destination_latitude': line.destination_latitude,
+            'destination_longitude': line.destination_longitude,
+            'allowed_radius': line.allowed_radius,
+            'gps_distance': line.gps_distance,
+            'gps_valid': bool(line.gps_valid),
+            'review_state': line.review_state,
+            'reject_reason': line.reject_reason or '',
+            'notes': line.notes or '',
+            'transferred': bool(line.transferred),
+        }
+
+    @staticmethod
     def _normalize_and_validate_time(value):
         """Return normalized HH:MM[:SS] or False when the value is invalid."""
         if not isinstance(value, str):
@@ -318,6 +350,12 @@ class DriverAppDeliveryAPI(http.Controller):
         if not batch:
             return ok(None, message='لا يوجد ملف لهذا الشهر.')
 
+        lines = batch.request_lines.sorted(key=lambda line: (
+            fields.Date.to_string(line.request_date) if line.request_date else '',
+            line.request_time or '',
+            line.id,
+        ))
+
         return ok({
             'id': batch.id,
             'name': batch.name,
@@ -330,6 +368,7 @@ class DriverAppDeliveryAPI(http.Controller):
             'pending_count': batch.pending_count,
             'accepted_count': batch.accepted_count,
             'rejected_count': batch.rejected_count,
+            'lines': [self._serialize_batch_line(line) for line in lines],
         })
 
     @http.route(
