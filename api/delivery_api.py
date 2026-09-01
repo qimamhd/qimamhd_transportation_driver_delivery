@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import re
-
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import ValidationError
@@ -71,6 +70,105 @@ class DriverAppDeliveryAPI(http.Controller):
         if second is not None:
             normalized += ':' + second
         return normalized
+
+    @staticmethod
+    def _validate_period(month, year):
+        try:
+            month = int(month)
+            year = int(year)
+        except (TypeError, ValueError):
+            return False, False
+        if month < 1 or month > 12 or year < 2000 or year > 2100:
+            return False, False
+        return month, year
+
+    @staticmethod
+    def _period_position(month, year, today):
+        current_key = (today.year, today.month)
+        period_key = (year, month)
+        if period_key < current_key:
+            return 'past'
+        if period_key > current_key:
+            return 'future'
+        return 'current'
+
+    @staticmethod
+    def _period_counts(batch_ids):
+        """Aggregate period counters in one query for scalable month listings."""
+        counts = {
+            batch_id: {
+                'total_count': 0,
+                'pending_count': 0,
+                'accepted_count': 0,
+                'rejected_count': 0,
+                'gps_valid_count': 0,
+                'gps_invalid_count': 0,
+            }
+            for batch_id in batch_ids
+        }
+        if not batch_ids:
+            return counts
+
+        Line = request.env['trnsp.store.driver.request.line'].sudo()
+        groups = Line.read_group(
+            [('batch_id', 'in', list(batch_ids))],
+            ['batch_id', 'review_state', 'gps_valid'],
+            ['batch_id', 'review_state', 'gps_valid'],
+            lazy=False,
+        )
+        for group in groups:
+            batch_value = group.get('batch_id')
+            batch_id = batch_value[0] if isinstance(batch_value, (list, tuple)) else batch_value
+            if not batch_id or batch_id not in counts:
+                continue
+            amount = int(group.get('__count') or 0)
+            item = counts[batch_id]
+            item['total_count'] += amount
+            review_state = group.get('review_state')
+            if review_state == 'pending':
+                item['pending_count'] += amount
+            elif review_state == 'accepted':
+                item['accepted_count'] += amount
+            elif review_state == 'rejected':
+                item['rejected_count'] += amount
+            if group.get('gps_valid'):
+                item['gps_valid_count'] += amount
+            else:
+                item['gps_invalid_count'] += amount
+        return counts
+
+    @classmethod
+    def _batch_summary(cls, batch, today, counts=None):
+        month = int(batch.month_name)
+        position = cls._period_position(month, batch.year, today)
+        counts = counts or {
+            'total_count': batch.line_count,
+            'pending_count': batch.pending_count,
+            'accepted_count': batch.accepted_count,
+            'rejected_count': batch.rejected_count,
+            'gps_valid_count': batch.gps_valid_count,
+            'gps_invalid_count': batch.gps_invalid_count,
+        }
+        return {
+            'batch_id': batch.id,
+            'batch_name': batch.name,
+            'month': month,
+            'year': batch.year,
+            'state': batch.state,
+            'position': position,
+            'is_current': position == 'current',
+            'is_past': position == 'past',
+            'is_open': batch.state == 'draft',
+            'needs_attention': position == 'past' and batch.state == 'draft',
+            'can_add_delivery': batch.state == 'draft',
+            'can_close': batch.state == 'draft' and counts['total_count'] > 0,
+            'total_count': counts['total_count'],
+            'pending_count': counts['pending_count'],
+            'accepted_count': counts['accepted_count'],
+            'rejected_count': counts['rejected_count'],
+            'gps_valid_count': counts['gps_valid_count'],
+            'gps_invalid_count': counts['gps_invalid_count'],
+        }
 
     def _get_or_create_batch(self, driver, request_date):
         month = '%02d' % request_date.month
@@ -213,6 +311,42 @@ class DriverAppDeliveryAPI(http.Controller):
                 'التاريخ غير صحيح. استخدم الصيغة YYYY-MM-DD.'
             )
 
+        server_today = fields.Date.today()
+        if request_date > server_today:
+            return error(
+                'FUTURE_DELIVERY_DATE',
+                'لا يمكن تسجيل توصيلة بتاريخ مستقبلي.',
+                status=409,
+                details={
+                    'server_date': fields.Date.to_string(server_today),
+                    'requested_date': fields.Date.to_string(request_date),
+                },
+            )
+
+        # Optional period context is additive/backward-compatible.  When a
+        # newer mobile client explicitly selects a month/year, require the
+        # delivery date to belong to that period so a UI selection can never
+        # accidentally write into another monthly batch.
+        selected_month = data.get('period_month')
+        selected_year = data.get('period_year')
+        if selected_month not in (None, '') or selected_year not in (None, ''):
+            period_month, period_year = self._validate_period(
+                selected_month, selected_year
+            )
+            if not period_month:
+                return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
+            if request_date.month != period_month or request_date.year != period_year:
+                return error(
+                    'DELIVERY_DATE_PERIOD_MISMATCH',
+                    'تاريخ التوصيلة لا ينتمي إلى الفترة المحددة.',
+                    status=409,
+                    details={
+                        'period_month': period_month,
+                        'period_year': period_year,
+                        'requested_date': fields.Date.to_string(request_date),
+                    },
+                )
+
         request_time = self._normalize_and_validate_time(data.get('time'))
         if not request_time:
             return error(
@@ -318,8 +452,227 @@ class DriverAppDeliveryAPI(http.Controller):
             'gps_distance': line.gps_distance,
             'allowed_radius': line.allowed_radius,
             'review_state': line.review_state,
+            'period_month': request_date.month,
+            'period_year': request_date.year,
+            'is_historical_period': (request_date.year, request_date.month) < (server_today.year, server_today.month),
             'duplicate': False,
         }, message='تم تسجيل التوصيلة.', status=201)
+
+    @http.route(
+        '/api/driver/v1/delivery-periods',
+        type='http', auth='public', methods=['GET'], csrf=False
+    )
+    def delivery_periods(self, year=None, state=None, **kwargs):
+        """Return lightweight monthly summaries for history/navigation.
+
+        One batch exists at most per driver/month/company.  This endpoint is
+        intentionally summary-only so years of data do not require returning
+        every delivery line.  Existing clients can ignore the additive
+        metadata fields.
+        """
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, session = auth
+
+        domain = [
+            ('driver_id', '=', driver.id),
+            ('company_id', '=', driver.company_id.id),
+        ]
+        if year not in (None, ''):
+            try:
+                year_value = int(year)
+            except (TypeError, ValueError):
+                return error('INVALID_PERIOD', 'السنة غير صحيحة.')
+            if year_value < 2000 or year_value > 2100:
+                return error('INVALID_PERIOD', 'السنة غير صحيحة.')
+            domain.append(('year', '=', year_value))
+
+        valid_states = {'draft', 'done', 'review', 'approved', 'transferred', 'cancel'}
+        if state not in (None, ''):
+            if state not in valid_states:
+                return error('INVALID_STATE', 'حالة الفترة غير صحيحة.')
+            domain.append(('state', '=', state))
+
+        batches = request.env['trnsp.store.driver.request.batch'].sudo().search(
+            domain, order='year desc, month_name desc, id desc'
+        )
+        today = fields.Date.today()
+        counts_map = self._period_counts(batches.ids)
+        periods = [
+            self._batch_summary(batch, today, counts_map.get(batch.id))
+            for batch in batches
+        ]
+
+        return ok({
+            'server_date': fields.Date.to_string(today),
+            'current_period': {'month': today.month, 'year': today.year},
+            'open_period_count': len([p for p in periods if p['is_open']]),
+            'past_open_period_count': len([p for p in periods if p['needs_attention']]),
+            'periods': periods,
+        })
+
+    @http.route(
+        '/api/driver/v1/delivery-period-options',
+        type='http', auth='public', methods=['GET'], csrf=False
+    )
+    def delivery_period_options(self, months_back=24, **kwargs):
+        """Return selectable current/past periods without creating batches.
+
+        This lets the mobile app work in October while the driver intentionally
+        completes September.  A missing batch is a valid selectable period; it
+        will be created only when the first delivery is submitted.
+        """
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, session = auth
+
+        try:
+            months_back = int(months_back or 24)
+        except (TypeError, ValueError):
+            return error('INVALID_RANGE', 'نطاق الأشهر غير صحيح.')
+        months_back = max(0, min(months_back, 60))
+
+        today = fields.Date.today()
+        Batch = request.env['trnsp.store.driver.request.batch'].sudo()
+        existing = Batch.search([
+            ('driver_id', '=', driver.id),
+            ('company_id', '=', driver.company_id.id),
+        ])
+        existing_map = {(int(b.month_name), b.year): b for b in existing}
+        counts_map = self._period_counts(existing.ids)
+
+        periods = []
+        year_value = today.year
+        month_value = today.month
+        for offset in range(months_back + 1):
+            total = today.year * 12 + (today.month - 1) - offset
+            year_value = total // 12
+            month_value = (total % 12) + 1
+            batch = existing_map.get((month_value, year_value))
+            if batch:
+                item = self._batch_summary(batch, today, counts_map.get(batch.id))
+            else:
+                item = {
+                    'batch_id': None,
+                    'batch_name': None,
+                    'month': month_value,
+                    'year': year_value,
+                    'state': None,
+                    'position': 'current' if offset == 0 else 'past',
+                    'is_current': offset == 0,
+                    'is_past': offset > 0,
+                    'is_open': True,
+                    'needs_attention': False,
+                    'can_add_delivery': True,
+                    'can_close': False,
+                    'total_count': 0,
+                    'pending_count': 0,
+                    'accepted_count': 0,
+                    'rejected_count': 0,
+                    'gps_valid_count': 0,
+                    'gps_invalid_count': 0,
+                }
+            periods.append(item)
+
+        return ok({
+            'server_date': fields.Date.to_string(today),
+            'current_period': {'month': today.month, 'year': today.year},
+            'months_back': months_back,
+            'periods': periods,
+        })
+
+    @http.route(
+        '/api/driver/v1/delivery-lines',
+        type='http', auth='public', methods=['GET'], csrf=False
+    )
+    def delivery_lines(
+        self, month=None, year=None, page=1, limit=50,
+        review_state=None, gps_status=None, request_date=None, **kwargs
+    ):
+        """Paged delivery history for high-volume month detail screens."""
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, session = auth
+
+        today = fields.Date.today()
+        month, year = self._validate_period(month or today.month, year or today.year)
+        if not month:
+            return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
+        try:
+            page = max(1, int(page or 1))
+            limit = int(limit or 50)
+        except (TypeError, ValueError):
+            return error('INVALID_PAGING', 'قيم الاسترجاع غير صحيحة.')
+        limit = max(10, min(limit, 200))
+
+        batch = request.env['trnsp.store.driver.request.batch'].sudo().search([
+            ('driver_id', '=', driver.id),
+            ('month_name', '=', '%02d' % month),
+            ('year', '=', year),
+            ('company_id', '=', driver.company_id.id),
+        ], limit=1)
+        if not batch:
+            return ok({
+                'month': month, 'year': year, 'state': None,
+                'page': page, 'limit': limit, 'total_count': 0,
+                'has_more': False, 'lines': [],
+            }, message='لا يوجد ملف لهذا الشهر.')
+
+        domain = [('batch_id', '=', batch.id)]
+        valid_review_states = {'pending', 'accepted', 'rejected'}
+        if review_state not in (None, '', 'all'):
+            if review_state not in valid_review_states:
+                return error('INVALID_REVIEW_STATE', 'حالة المراجعة غير صحيحة.')
+            domain.append(('review_state', '=', review_state))
+
+        if gps_status not in (None, '', 'all'):
+            if gps_status == 'inside':
+                domain.append(('gps_valid', '=', True))
+            elif gps_status == 'outside':
+                domain.append(('gps_valid', '=', False))
+            else:
+                return error('INVALID_GPS_STATUS', 'فلتر GPS غير صحيح.')
+
+        if request_date not in (None, ''):
+            try:
+                filter_date = fields.Date.from_string(request_date)
+            except (TypeError, ValueError):
+                filter_date = False
+            if not filter_date:
+                return error('INVALID_DATE', 'التاريخ غير صحيح. استخدم YYYY-MM-DD.')
+            if filter_date.month != month or filter_date.year != year:
+                return error(
+                    'DATE_OUTSIDE_PERIOD',
+                    'تاريخ الفلتر لا ينتمي إلى الشهر المحدد.',
+                )
+            domain.append(('request_date', '=', filter_date))
+
+        Line = request.env['trnsp.store.driver.request.line'].sudo()
+        total_count = Line.search_count(domain)
+        offset = (page - 1) * limit
+        lines = Line.search(
+            domain,
+            order='request_date desc, request_time desc, id desc',
+            limit=limit,
+            offset=offset,
+        )
+        returned = len(lines)
+        return ok({
+            'batch_id': batch.id,
+            'batch_name': batch.name,
+            'month': month,
+            'year': year,
+            'state': batch.state,
+            'page': page,
+            'limit': limit,
+            'total_count': total_count,
+            'returned_count': returned,
+            'has_more': offset + returned < total_count,
+            'lines': [self._serialize_batch_line(line) for line in lines],
+        })
 
     @http.route(
         '/api/driver/v1/current-batch',
@@ -397,6 +750,14 @@ class DriverAppDeliveryAPI(http.Controller):
         if month < 1 or month > 12 or year < 2000 or year > 2100:
             return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
 
+        if (year, month) > (today.year, today.month):
+            return error(
+                'FUTURE_PERIOD',
+                'لا يمكن إقفال فترة مستقبلية.',
+                status=409,
+                details={'server_date': fields.Date.to_string(today)},
+            )
+
         batch = request.env['trnsp.store.driver.request.batch'].sudo().search([
             ('driver_id', '=', driver.id),
             ('month_name', '=', '%02d' % month),
@@ -405,13 +766,13 @@ class DriverAppDeliveryAPI(http.Controller):
         ], limit=1)
         if not batch:
             return error('BATCH_NOT_FOUND', 'لا يوجد ملف لهذا الشهر.', status=404)
-        if batch.state == 'done':
+        if batch.state in ('done', 'review', 'approved', 'transferred'):
             return ok({
                 'batch_id': batch.id,
                 'batch_name': batch.name,
                 'state': batch.state,
                 'already_completed': True,
-            }, message='ملف الشهر مكتمل مسبقًا.')
+            }, message='ملف الشهر مقفل مسبقًا.')
 
         if batch.state != 'draft':
             return error(
