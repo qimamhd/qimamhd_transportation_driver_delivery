@@ -58,17 +58,24 @@ class DriverAppMasterDataAPI(http.Controller):
         lines = headers.mapped('pricing_lines').filtered(
             lambda line: bool(line.destination_path_id)
         )
-        # One destination may occur in more than one pricing record. Return it once.
+        # POST /deliveries uses the first matching pricing line. Preserve that
+        # same order here so the mobile preview never reads a different record.
         result = {}
         for line in lines:
             destination = line.destination_path_id
-            current = result.setdefault(destination.id, {
+            if destination.id in result:
+                continue
+            gps_configured = bool(
+                line.gbs_from and line.gbs_to and line.gps_radius > 0
+            )
+            result[destination.id] = {
                 'id': destination.id,
                 'name': destination.display_name,
-                'gps_configured': False,
-            })
-            if line.gbs_from and line.gbs_to and line.gps_radius > 0:
-                current['gps_configured'] = True
+                'gps_configured': gps_configured,
+                'destination_latitude': line.gbs_from if gps_configured else None,
+                'destination_longitude': line.gbs_to if gps_configured else None,
+                'allowed_radius': line.gps_radius,
+            }
 
         return ok(sorted(result.values(), key=lambda x: x['name'] or ''))
 
