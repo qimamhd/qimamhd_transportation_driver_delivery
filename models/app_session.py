@@ -42,7 +42,20 @@ class DriverAppSession(models.Model):
     ]
 
     @api.model
-    def create_session(self, employee, device_name=False, days=30):
+    def create_session(self, employee, device_name=False, days=None):
+        # Keep the existing 30-day behavior by default, while allowing a system
+        # administrator to shorten it without changing mobile code.
+        if days is None:
+            raw_days = self.env['ir.config_parameter'].sudo().get_param(
+                'qimamhd_transportation_driver_delivery.session_days',
+                default='30',
+            )
+            try:
+                days = int(raw_days)
+            except (TypeError, ValueError):
+                days = 30
+        days = max(1, min(int(days), 30))
+
         token = secrets.token_urlsafe(32)
         digest = hashlib.sha256(token.encode('utf-8')).hexdigest()
         now = fields.Datetime.now()

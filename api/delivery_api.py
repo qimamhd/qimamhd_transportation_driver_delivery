@@ -5,6 +5,7 @@ import re
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import ValidationError
+from psycopg2 import IntegrityError
 
 from .common import (
     authenticate_driver,
@@ -15,6 +16,7 @@ from .common import (
     int_value,
     ok,
     read_json_body,
+    request_payload_too_large,
 )
 
 
@@ -73,13 +75,34 @@ class DriverAppDeliveryAPI(http.Controller):
                 status=409,
             )
 
-        batch = Batch.create({
+        vals = {
             'driver_id': driver.id,
             'month_name': month,
             'year': year,
             'company_id': company.id,
             'branch_id': branch_id,
-        })
+        }
+        try:
+            with request.env.cr.savepoint():
+                batch = Batch.create(vals)
+        except IntegrityError:
+            # Two mobile requests can race while creating the same month.
+            # The SQL unique constraint is authoritative; reuse the winner.
+            batch = Batch.search([
+                ('driver_id', '=', driver.id),
+                ('month_name', '=', month),
+                ('year', '=', year),
+                ('company_id', '=', company.id),
+            ], limit=1)
+            if not batch:
+                raise
+            if batch.state != 'draft':
+                return False, error(
+                    'PERIOD_LOCKED',
+                    'ملف هذا الشهر غير مفتوح لاستقبال توصيلات جديدة.',
+                    status=409,
+                    details={'state': batch.state},
+                )
         return batch, None
 
     @http.route(
@@ -91,11 +114,20 @@ class DriverAppDeliveryAPI(http.Controller):
         if response:
             return response
         driver, session = auth
+
+        if request_payload_too_large(32 * 1024):
+            return error(
+                'PAYLOAD_TOO_LARGE',
+                'حجم الطلب أكبر من المسموح.',
+                status=413,
+            )
         data = read_json_body()
 
-        mobile_uuid = (data.get('uuid') or '').strip()
+        mobile_uuid = str(data.get('uuid') or '').strip()
         if not mobile_uuid:
             return error('UUID_REQUIRED', 'uuid مطلوب لكل توصيلة.')
+        if len(mobile_uuid) > 128:
+            return error('INVALID_UUID', 'uuid غير صالح.')
 
         # Idempotency: repeated mobile sends return the original row, not a duplicate.
         existing = request.env['trnsp.store.driver.request.line'].sudo().search([
@@ -191,20 +223,49 @@ class DriverAppDeliveryAPI(http.Controller):
         if batch_error:
             return batch_error
 
+        line_vals = {
+            'batch_id': batch.id,
+            'mobile_uuid': mobile_uuid,
+            'request_date': request_date,
+            'request_time': request_time,
+            'product_car_id': car.id,
+            'source_path_id': source_id,
+            'destination_path_id': destination_id,
+            'driver_latitude': latitude,
+            'driver_longitude': longitude,
+            'notes': str(data.get('notes') or '').strip()[:255],
+            'server_received_at': fields.Datetime.now(),
+        }
         try:
-            line = request.env['trnsp.store.driver.request.line'].sudo().create({
-                'batch_id': batch.id,
-                'mobile_uuid': mobile_uuid,
-                'request_date': request_date,
-                'request_time': request_time,
-                'product_car_id': car.id,
-                'source_path_id': source_id,
-                'destination_path_id': destination_id,
-                'driver_latitude': latitude,
-                'driver_longitude': longitude,
-                'notes': (data.get('notes') or '').strip()[:255],
-                'server_received_at': fields.Datetime.now(),
-            })
+            with request.env.cr.savepoint():
+                line = request.env['trnsp.store.driver.request.line'].sudo().create(line_vals)
+        except IntegrityError:
+            # The UUID SQL constraint closes the tiny race between the initial
+            # idempotency lookup and create(). Return the winning row cleanly.
+            existing = request.env['trnsp.store.driver.request.line'].sudo().search([
+                ('mobile_uuid', '=', mobile_uuid),
+            ], limit=1)
+            if existing:
+                if existing.driver_id.id != driver.id:
+                    return error(
+                        'UUID_CONFLICT',
+                        'uuid مستخدم في توصيلة أخرى.',
+                        status=409,
+                    )
+                return ok({
+                    'id': existing.id,
+                    'uuid': existing.mobile_uuid,
+                    'batch_id': existing.batch_id.id,
+                    'batch_name': existing.batch_id.name,
+                    'gps_valid': bool(existing.gps_valid),
+                    'gps_distance': existing.gps_distance,
+                    'duplicate': True,
+                }, message='التوصيلة مسجلة مسبقًا.')
+            return error(
+                'CREATE_CONFLICT',
+                'تعذر حفظ التوصيلة بسبب تعارض في البيانات.',
+                status=409,
+            )
         except ValidationError as exc:
             return error('VALIDATION_ERROR', str(exc), status=409)
         except Exception:
@@ -280,6 +341,12 @@ class DriverAppDeliveryAPI(http.Controller):
         if response:
             return response
         driver, session = auth
+        if request_payload_too_large(8 * 1024):
+            return error(
+                'PAYLOAD_TOO_LARGE',
+                'حجم الطلب أكبر من المسموح.',
+                status=413,
+            )
         data = read_json_body()
 
         today = fields.Date.today()

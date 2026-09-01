@@ -103,3 +103,8 @@ POST endpoints: `/login`, `/logout`, `/deliveries`, `/complete-period`.
 GET endpoints remain normal HTTP GET endpoints and return plain JSON.
 The temporary `/login_test` route remains `type='http'` for isolated test-database
 diagnostics only and must be removed before production deployment.
+
+
+## Connection health
+- `GET /api/driver/v1/ping` - safe unauthenticated connection check for Qimam Route setup.
+- The temporary `login_test` endpoint was removed in v13.0.4.2.0 and must not exist in production.

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
-import secrets
 
 from odoo import http, fields
 from odoo.http import request
@@ -12,6 +11,7 @@ from .common import (
     ok,
     read_json_body,
     bearer_token,
+    request_payload_too_large,
 )
 
 
@@ -22,10 +22,17 @@ class DriverAppAuthAPI(http.Controller):
         type='json', auth='public', methods=['POST'], csrf=False
     )
     def login(self, **kwargs):
+        if request_payload_too_large(16 * 1024):
+            return error(
+                'PAYLOAD_TOO_LARGE',
+                'حجم الطلب أكبر من المسموح.',
+                status=413,
+            )
+
         data = read_json_body()
-        identification_id = (data.get('identification_id') or '').strip()
+        identification_id = str(data.get('identification_id') or '').strip()
         password = data.get('password')
-        device_name = (data.get('device_name') or '').strip()[:128]
+        device_name = str(data.get('device_name') or '').strip()[:128]
 
         if not identification_id:
             return error('IDENTIFICATION_REQUIRED', 'رقم الهوية مطلوب.')
@@ -33,6 +40,15 @@ class DriverAppAuthAPI(http.Controller):
             return error(
                 'PASSWORD_REQUIRED',
                 'كلمة المرور مطلوبة.'
+            )
+
+        # Defensive bounds: avoid oversized input reaching ORM/password hashing.
+        # Invalid bounds deliberately return the same generic credential response.
+        if len(identification_id) > 64 or len(str(password)) > 256:
+            return error(
+                'INVALID_CREDENTIALS',
+                'بيانات الدخول غير صحيحة.',
+                status=401,
             )
 
         drivers = request.env['hr.employee'].sudo().search([
@@ -86,10 +102,18 @@ class DriverAppAuthAPI(http.Controller):
             'app_last_login': now,
         })
 
-        token, session = request.env['trnsp.driver.app.session'].sudo().create_session(
-            driver,
-            device_name=device_name,
-        )
+        try:
+            token, session = request.env['trnsp.driver.app.session'].sudo().create_session(
+                driver,
+                device_name=device_name,
+            )
+        except Exception:
+            request.env.cr.rollback()
+            return error(
+                'LOGIN_FAILED',
+                'تعذر إنشاء جلسة التطبيق. حاول مرة أخرى.',
+                status=500,
+            )
 
         return ok({
             'token': token,
@@ -135,90 +159,3 @@ class DriverAppAuthAPI(http.Controller):
             'biometric_allowed': bool(driver.biometric_allowed),
             'session_expires_at': session.expires_at,
         })
-
-class DriverLoginTestController(http.Controller):
-
-    @http.route(
-        '/api/driver/v1/login_test',
-        type='http',
-        auth='none',
-        methods=['POST'],
-        csrf=False
-    )
-    def driver_login_test(self, **kwargs):
-        import json
-        from odoo import api, registry, SUPERUSER_ID
-        from odoo.http import request
-        from werkzeug.wrappers import Response
-
-        test_db = 'almirabi_2025_test'
-
-        try:
-            payload = json.loads(request.httprequest.get_data(as_text=True) or '{}')
-        except Exception:
-            payload = {}
-
-        identification_id = (payload.get('identification_id') or '').strip()
-        password = str(payload.get('password') or '').strip()
-        device_name = (payload.get('device_name') or '').strip()
-
-        def respond(body, status):
-            return Response(
-                json.dumps(body, ensure_ascii=False),
-                status=status,
-                content_type='application/json; charset=utf-8'
-            )
-
-        if not identification_id or not password:
-            return respond({
-                'success': False,
-                'code': 'MISSING_CREDENTIALS',
-                'message': 'identification_id and password are required',
-            }, 400)
-
-        try:
-            reg = registry(test_db)
-            with reg.cursor() as cr:
-                env = api.Environment(cr, SUPERUSER_ID, {})
-                employees = env['hr.employee'].sudo().search([
-                    ('app_access_enabled', '=', True),
-                    ('driver_emp', '=', True),
-                    ('identification_id', '=', identification_id),
-                ], limit=2)
-
-                if len(employees) != 1:
-                    return respond({
-                        'success': False,
-                        'code': 'INVALID_CREDENTIALS',
-                        'message': 'Invalid login or credentials',
-                    }, 401)
-
-                employee = employees[0]
-                valid = employee.verify_app_password(password)
-                if not valid:
-                    return respond({
-                        'success': False,
-                        'code': 'INVALID_CREDENTIALS',
-                        'message': 'Invalid login or credentials',
-                    }, 401)
-
-                return respond({
-                    'success': True,
-                    'test_mode': True,
-                    'database': test_db,
-                    'driver': {
-                        'id': employee.id,
-                        'name': employee.name,
-                        'identification_id': employee.identification_id,
-                    },
-                    'device_name': device_name,
-                    'message': 'TEST LOGIN OK',
-                }, 200)
-
-        except Exception as exc:
-            return respond({
-                'success': False,
-                'code': 'TEST_LOGIN_ERROR',
-                'message': str(exc),
-            }, 500)
-

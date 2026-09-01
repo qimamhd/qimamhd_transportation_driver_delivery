@@ -67,11 +67,27 @@ def read_json_body():
     return data if isinstance(data, dict) else {}
 
 
+
+def request_payload_too_large(max_bytes):
+    """Best-effort controller-side payload guard; Nginx remains authoritative."""
+    raw = request.httprequest.headers.get('Content-Length')
+    if not raw:
+        return False
+    try:
+        return int(raw) > int(max_bytes)
+    except (TypeError, ValueError):
+        return True
+
 def bearer_token():
     header = request.httprequest.headers.get('Authorization', '') or ''
+    # Generated tokens are short. Bound the header value before hashing/searching.
+    if len(header) > 512:
+        return False
     parts = header.strip().split(None, 1)
     if len(parts) == 2 and parts[0].lower() == 'bearer':
-        return parts[1].strip()
+        token = parts[1].strip()
+        if 20 <= len(token) <= 256:
+            return token
     return False
 
 

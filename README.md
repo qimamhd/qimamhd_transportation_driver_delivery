@@ -38,3 +38,11 @@ A final install/upgrade on an Odoo 13 test database is still required because in
 - Rollback is allowed only while the settlement is draft, deletes that dedicated settlement, clears line transfer links, and returns the batch to `approved`.
 - From `approved`, manager can either transfer again or use `إعادة فتح` so the driver can submit forgotten deliveries; reopening resets review decisions to pending.
 - Added guarded migration rollback for a v13.0.4.0.8 settlement only when ownership can be proven from line links and quantities.
+
+## v13.0.4.2.0 - Backend Security RC
+- Removed the temporary unauthenticated `login_test` route and fixed test-database dependency.
+- Added safe `GET /api/driver/v1/ping` for Qimam Route server setup.
+- Added bounded login/payload/Bearer-token inputs.
+- Hardened concurrent monthly-batch creation and delivery UUID idempotency races using existing SQL uniqueness and savepoints.
+- Kept the approved login, GPS, monthly review, settlement transfer, rollback, and manager-unlock concepts unchanged.
+- Production still requires HTTPS + reverse proxy rate limiting/firewall hardening; see `README_v13_4_2_0_SECURITY_RC.md`.
