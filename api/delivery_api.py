@@ -171,24 +171,38 @@ class DriverAppDeliveryAPI(http.Controller):
         }
 
     def _get_or_create_batch(self, driver, request_date):
-        """Resolve the monthly batch under the server-controlled period policy.
+        """Resolve/create the driver batch under the company period control.
 
-        Current period:
-            - a missing batch is created on the first delivery;
-            - an existing batch must still be draft.
+        A delivery period must explicitly exist and be ``open`` for the
+        driver's company. This applies equally to current and historical
+        months. The period screen is the single back-office authority.
 
-        Historical period:
-            - it is NEVER auto-created by the mobile API;
-            - a manager must explicitly create/reopen that driver's batch in
-              Odoo, leaving it in draft, before the app may submit to it.
-
-        This keeps old accounting periods from being silently reopened by a
-        stale or manipulated mobile client.
+        Once the company period is open, a missing per-driver batch is created
+        lazily on the first delivery. An existing per-driver batch must still
+        be ``draft``; closing a driver's own batch therefore remains a second
+        safety lock even while the company period is open.
         """
         month = '%02d' % request_date.month
         year = request_date.year
         company = driver.company_id
-        today = fields.Date.today()
+
+        Period = request.env['trnsp.driver.delivery.period'].sudo()
+        period = Period.search([
+            ('company_id', '=', company.id),
+            ('month_name', '=', month),
+            ('year', '=', year),
+        ], limit=1)
+        if not period or period.state != 'open':
+            return False, error(
+                'PERIOD_NOT_OPEN',
+                'هذه الفترة غير مفتوحة من الإدارة لاستقبال التوصيلات.',
+                status=409,
+                details={
+                    'period_month': request_date.month,
+                    'period_year': request_date.year,
+                    'period_state': period.state if period else None,
+                },
+            )
 
         Batch = request.env['trnsp.store.driver.request.batch'].sudo()
         batch = Batch.search([
@@ -202,7 +216,7 @@ class DriverAppDeliveryAPI(http.Controller):
             if batch.state != 'draft':
                 return False, error(
                     'PERIOD_LOCKED',
-                    'هذه الفترة مقفلة ولا تستقبل توصيلات جديدة.',
+                    'ملف السائق لهذه الفترة مقفل ولا يستقبل توصيلات جديدة.',
                     status=409,
                     details={
                         'batch_id': batch.id,
@@ -213,18 +227,6 @@ class DriverAppDeliveryAPI(http.Controller):
                     }
                 )
             return batch, None
-
-        if (request_date.year, request_date.month) < (today.year, today.month):
-            return False, error(
-                'PERIOD_NOT_OPEN',
-                'الفترة السابقة غير مفتوحة من الإدارة لاستقبال توصيلات جديدة.',
-                status=409,
-                details={
-                    'period_month': request_date.month,
-                    'period_year': request_date.year,
-                    'server_date': fields.Date.to_string(today),
-                },
-            )
 
         branch_id = driver_branch_id(driver)
         if not branch_id:
@@ -245,8 +247,6 @@ class DriverAppDeliveryAPI(http.Controller):
             with request.env.cr.savepoint():
                 batch = Batch.create(vals)
         except IntegrityError:
-            # Two mobile requests can race while creating the same month.
-            # The SQL unique constraint is authoritative; reuse the winner.
             batch = Batch.search([
                 ('driver_id', '=', driver.id),
                 ('month_name', '=', month),
@@ -254,13 +254,16 @@ class DriverAppDeliveryAPI(http.Controller):
                 ('company_id', '=', company.id),
             ], limit=1)
             if not batch:
-                raise
+                return False, error(
+                    'CREATE_CONFLICT',
+                    'تعذر إنشاء ملف الفترة بسبب تعارض في البيانات.',
+                    status=409,
+                )
             if batch.state != 'draft':
                 return False, error(
                     'PERIOD_LOCKED',
-                    'ملف هذا الشهر غير مفتوح لاستقبال توصيلات جديدة.',
+                    'ملف السائق لهذه الفترة مقفل ولا يستقبل توصيلات جديدة.',
                     status=409,
-                    details={'state': batch.state},
                 )
         return batch, None
 
@@ -546,19 +549,11 @@ class DriverAppDeliveryAPI(http.Controller):
         type='http', auth='public', methods=['GET'], csrf=False
     )
     def delivery_period_options(self, months_back=24, **kwargs):
-        """Return only periods the authenticated driver may submit to.
+        """Return only company periods currently allowed for this driver.
 
-        The mobile app does not invent historical months anymore.  Odoo is the
-        authority:
-
-        * the current month is selectable while its batch is missing or draft;
-        * a past month is selectable only when an existing batch for this
-          driver/company is explicitly in draft (created or reopened by the
-          back office);
-        * closed/reviewed/approved/transferred/cancelled periods are omitted.
-
-        ``months_back`` remains accepted for backward compatibility and only
-        limits how far back already-open historical batches are returned.
+        The app never invents periods. ``trnsp.driver.delivery.period`` is the
+        authority. An open company period is offered unless this driver's
+        monthly batch already exists in a non-draft state.
         """
         auth, response = authenticate_driver()
         if response:
@@ -572,83 +567,71 @@ class DriverAppDeliveryAPI(http.Controller):
         months_back = max(0, min(months_back, 60))
 
         today = fields.Date.today()
-        current_key = (today.year, today.month)
-        minimum_total = today.year * 12 + (today.month - 1) - months_back
+        current_total = today.year * 12 + (today.month - 1)
+        minimum_total = current_total - months_back
 
-        Batch = request.env['trnsp.store.driver.request.batch'].sudo()
-        batches = Batch.search([
-            ('driver_id', '=', driver.id),
+        Period = request.env['trnsp.driver.delivery.period'].sudo()
+        open_periods = Period.search([
             ('company_id', '=', driver.company_id.id),
-            ('state', '=', 'draft'),
+            ('state', '=', 'open'),
         ], order='year desc, month_name desc, id desc')
 
-        eligible_batches = []
-        for batch in batches:
-            batch_month = int(batch.month_name)
-            batch_key = (batch.year, batch_month)
-            batch_total = batch.year * 12 + (batch_month - 1)
-            if batch_key > current_key:
-                continue
-            if batch_total < minimum_total:
-                continue
-            eligible_batches.append(batch)
-
-        counts_map = self._period_counts([batch.id for batch in eligible_batches])
+        Batch = request.env['trnsp.store.driver.request.batch'].sudo()
         periods = []
-
-        current_batch = next((
-            batch for batch in eligible_batches
-            if batch.year == today.year and int(batch.month_name) == today.month
-        ), None)
-        any_current_batch = Batch.search([
-            ('driver_id', '=', driver.id),
-            ('company_id', '=', driver.company_id.id),
-            ('month_name', '=', '%02d' % today.month),
-            ('year', '=', today.year),
-        ], limit=1)
-
-        # A missing current batch is intentionally allowed and will be created
-        # by POST /deliveries on the first successful submission. If the
-        # current batch already exists but is closed, the current period is not
-        # offered to the app.
-        if current_batch:
-            periods.append(self._batch_summary(
-                current_batch, today, counts_map.get(current_batch.id)
-            ))
-        elif not any_current_batch:
-            periods.append({
-                'batch_id': None,
-                'batch_name': None,
-                'month': today.month,
-                'year': today.year,
-                'state': None,
-                'position': 'current',
-                'is_current': True,
-                'is_past': False,
-                'is_open': True,
-                'needs_attention': False,
-                'can_add_delivery': True,
-                'can_close': False,
-                'total_count': 0,
-                'pending_count': 0,
-                'accepted_count': 0,
-                'rejected_count': 0,
-                'gps_valid_count': 0,
-                'gps_invalid_count': 0,
-            })
-
-        for batch in eligible_batches:
-            if batch.year == today.year and int(batch.month_name) == today.month:
+        for period in open_periods:
+            period_month = int(period.month_name)
+            period_total = period.year * 12 + (period_month - 1)
+            # Future periods are never offered to drivers, even if an
+            # administrator created one early.
+            if period_total > current_total or period_total < minimum_total:
                 continue
-            periods.append(self._batch_summary(
-                batch, today, counts_map.get(batch.id)
-            ))
+
+            batch = Batch.search([
+                ('driver_id', '=', driver.id),
+                ('company_id', '=', driver.company_id.id),
+                ('month_name', '=', period.month_name),
+                ('year', '=', period.year),
+            ], limit=1)
+
+            # A driver who already completed/closed their own monthly batch
+            # cannot add to it merely because the company period stays open.
+            if batch and batch.state != 'draft':
+                continue
+
+            if batch:
+                counts_map = self._period_counts([batch.id])
+                summary = self._batch_summary(batch, today, counts_map.get(batch.id))
+            else:
+                is_current = period.year == today.year and period_month == today.month
+                summary = {
+                    'batch_id': None,
+                    'batch_name': None,
+                    'month': period_month,
+                    'year': period.year,
+                    'state': None,
+                    'position': 'current' if is_current else 'past',
+                    'is_current': is_current,
+                    'is_past': not is_current,
+                    'is_open': True,
+                    'needs_attention': not is_current,
+                    'can_add_delivery': True,
+                    'can_close': False,
+                    'total_count': 0,
+                    'pending_count': 0,
+                    'accepted_count': 0,
+                    'rejected_count': 0,
+                    'gps_valid_count': 0,
+                    'gps_invalid_count': 0,
+                }
+            summary['period_control_id'] = period.id
+            summary['period_control_state'] = period.state
+            periods.append(summary)
 
         return ok({
             'server_date': fields.Date.to_string(today),
             'current_period': {'month': today.month, 'year': today.year},
             'months_back': months_back,
-            'policy': 'server_allowed_only',
+            'policy': 'server_period_control',
             'periods': periods,
         })
 

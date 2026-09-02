@@ -27,6 +27,13 @@
                    eval="[(4, ref('group_driver_request_reviewer'))]"/>
         </record>
 
+        <record id="rule_driver_delivery_period_company" model="ir.rule">
+            <field name="name">فترات التوصيل حسب الشركة</field>
+            <field name="model_id" ref="model_trnsp_driver_delivery_period"/>
+            <field name="domain_force">[('company_id', 'in', user.company_ids.ids)]</field>
+            <field name="groups" eval="[(4, ref('group_driver_request_reviewer'))]"/>
+        </record>
+
         <record id="rule_driver_request_line_company" model="ir.rule">
             <field name="name">تفاصيل طلبات تطبيق السائقين حسب الشركة</field>
             <field name="model_id" ref="model_trnsp_store_driver_request_line"/>

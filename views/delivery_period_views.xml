@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <record id="trnsp_driver_delivery_period_tree" model="ir.ui.view">
+            <field name="name">trnsp.driver.delivery.period.tree</field>
+            <field name="model">trnsp.driver.delivery.period</field>
+            <field name="arch" type="xml">
+                <tree default_order="year desc, month_name desc"
+                      decoration-success="state == 'open'"
+                      decoration-muted="state == 'closed'">
+                    <field name="name" string="الفترة"/>
+                    <field name="month_name"/>
+                    <field name="year"/>
+                    <field name="state"/>
+                    <field name="opened_by" optional="hide"/>
+                    <field name="opened_at" optional="hide"/>
+                    <field name="closed_by" optional="hide"/>
+                    <field name="closed_at" optional="hide"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                    <button name="action_open_period" string="فتح" type="object"
+                            class="oe_highlight"
+                            groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                            attrs="{'invisible':[('state','=','open')]}"/>
+                    <button name="action_close_period" string="إقفال" type="object"
+                            groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                            confirm="بعد الإقفال لن تظهر هذه الفترة للسائقين ولن تقبل توصيلات جديدة. هل تريد المتابعة؟"
+                            attrs="{'invisible':[('state','=','closed')]}"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="trnsp_driver_delivery_period_form" model="ir.ui.view">
+            <field name="name">trnsp.driver.delivery.period.form</field>
+            <field name="model">trnsp.driver.delivery.period</field>
+            <field name="arch" type="xml">
+                <form string="إدارة فترة التوصيل">
+                    <header>
+                        <button name="action_open_period" string="فتح الفترة للتسجيل" type="object"
+                                class="oe_highlight"
+                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                                attrs="{'invisible':[('state','=','open')]}"/>
+                        <button name="action_close_period" string="إقفال الفترة" type="object"
+                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                                confirm="بعد الإقفال لن تظهر هذه الفترة للسائقين ولن تقبل توصيلات جديدة. هل تريد المتابعة؟"
+                                attrs="{'invisible':[('state','=','closed')]}"/>
+                        <field name="state" widget="statusbar" statusbar_visible="open,closed"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <label for="name"/>
+                            <h1><field name="name" readonly="1"/></h1>
+                        </div>
+                        <group>
+                            <group string="الفترة">
+                                <field name="month_name"/>
+                                <field name="year"/>
+                                <field name="company_id" groups="base.group_multi_company"
+                                      />
+                            </group>
+                            <group string="سجل التحكم">
+                                <field name="opened_by" readonly="1"/>
+                                <field name="opened_at" readonly="1"/>
+                                <field name="closed_by" readonly="1"/>
+                                <field name="closed_at" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="ملاحظات الإدارة">
+                            <field name="notes" placeholder="سبب فتح فترة سابقة أو أي ملاحظة إدارية..."/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="trnsp_driver_delivery_period_search" model="ir.ui.view">
+            <field name="name">trnsp.driver.delivery.period.search</field>
+            <field name="model">trnsp.driver.delivery.period</field>
+            <field name="arch" type="xml">
+                <search string="إدارة فترات التوصيل">
+                    <field name="month_name"/>
+                    <field name="year"/>
+                    <field name="state"/>
+                    <filter string="مفتوحة" name="period_open" domain="[('state','=','open')]"/>
+                    <filter string="مقفلة" name="period_closed" domain="[('state','=','closed')]"/>
+                    <group expand="0" string="تجميع حسب">
+                        <filter string="السنة" name="group_year" context="{'group_by':'year'}"/>
+                        <filter string="الحالة" name="group_state" context="{'group_by':'state'}"/>
+                        <filter string="الشركة" name="group_company" context="{'group_by':'company_id'}" groups="base.group_multi_company"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_trnsp_driver_delivery_period" model="ir.actions.act_window">
+            <field name="name">إدارة فترات التوصيل</field>
+            <field name="res_model">trnsp.driver.delivery.period</field>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="trnsp_driver_delivery_period_search"/>
+            <field name="context">{}</field>
+        </record>
+
+        <menuitem id="menu_trnsp_driver_delivery_period"
+                  name="إدارة فترات التوصيل"
+                  parent="qimamhd_transportation_v2_13.transportation_entry_menu"
+                  action="action_trnsp_driver_delivery_period"
+                  sequence="74"
+                  groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"/>
+    </data>
+</odoo>
