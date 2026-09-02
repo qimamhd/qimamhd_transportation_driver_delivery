@@ -41,6 +41,82 @@ class DriverDeliveryPeriod(models.Model):
     closed_at = fields.Datetime(string='تاريخ الإغلاق', readonly=True)
     notes = fields.Text(string='ملاحظات الإدارة')
 
+    app_driver_count = fields.Integer(
+        string='سائقو التطبيق',
+        compute='_compute_driver_period_stats',
+    )
+    allowed_driver_count = fields.Integer(
+        string='متاح لهم التسجيل',
+        compute='_compute_driver_period_stats',
+    )
+    blocked_driver_count = fields.Integer(
+        string='ملفاتهم مقفلة',
+        compute='_compute_driver_period_stats',
+    )
+    existing_batch_count = fields.Integer(
+        string='ملفات الفترة',
+        compute='_compute_driver_period_stats',
+    )
+
+
+    def _compute_driver_period_stats(self):
+        Employee = self.env['hr.employee']
+        Batch = self.env['trnsp.store.driver.request.batch']
+        for rec in self:
+            driver_domain = [
+                ('company_id', '=', rec.company_id.id),
+                ('driver_emp', '=', True),
+                ('app_access_enabled', '=', True),
+            ]
+            drivers = Employee.search(driver_domain)
+            rec.app_driver_count = len(drivers)
+
+            batches = Batch.search([
+                ('company_id', '=', rec.company_id.id),
+                ('month_name', '=', rec.month_name),
+                ('year', '=', rec.year),
+                ('driver_id', 'in', drivers.ids or [0]),
+            ]) if drivers else Batch.browse()
+
+            rec.existing_batch_count = len(batches)
+            blocked_driver_ids = set(
+                batches.filtered(lambda b: b.state != 'draft').mapped('driver_id').ids
+            )
+            rec.blocked_driver_count = len(blocked_driver_ids)
+            rec.allowed_driver_count = max(
+                rec.app_driver_count - rec.blocked_driver_count, 0
+            ) if rec.state == 'open' else 0
+
+    def action_view_period_batches(self):
+        self.ensure_one()
+        action = self.env.ref(
+            'qimamhd_transportation_driver_delivery.action_trnsp_store_driver_request_batch'
+        ).read()[0]
+        action['domain'] = [
+            ('company_id', '=', self.company_id.id),
+            ('month_name', '=', self.month_name),
+            ('year', '=', self.year),
+        ]
+        action['context'] = {
+            'default_company_id': self.company_id.id,
+            'default_month_name': self.month_name,
+            'default_year': self.year,
+        }
+        action['name'] = _('ملفات السائقين - %s') % self.name
+        return action
+
+    def action_view_blocked_batches(self):
+        self.ensure_one()
+        action = self.action_view_period_batches()
+        action['domain'] = [
+            ('company_id', '=', self.company_id.id),
+            ('month_name', '=', self.month_name),
+            ('year', '=', self.year),
+            ('state', '!=', 'draft'),
+        ]
+        action['name'] = _('ملفات السائقين المقفلة - %s') % self.name
+        return action
+
     _sql_constraints = [
         ('company_period_uniq', 'unique(company_id, month_name, year)',
          'توجد فترة توصيل لنفس الشركة والشهر والسنة مسبقاً.'),

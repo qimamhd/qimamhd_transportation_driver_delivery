@@ -11,12 +11,15 @@
                     <field name="name" string="الفترة"/>
                     <field name="month_name"/>
                     <field name="year"/>
+                    <field name="company_id"/>
                     <field name="state"/>
+                    <field name="allowed_driver_count" string="متاح لهم التسجيل"/>
+                    <field name="blocked_driver_count" string="ملفاتهم مقفلة"/>
+                    <field name="existing_batch_count" string="ملفات الفترة" optional="hide"/>
                     <field name="opened_by" optional="hide"/>
                     <field name="opened_at" optional="hide"/>
                     <field name="closed_by" optional="hide"/>
                     <field name="closed_at" optional="hide"/>
-                    <field name="company_id" groups="base.group_multi_company"/>
                     <button name="action_open_period" string="فتح" type="object"
                             class="oe_highlight"
                             groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
@@ -46,6 +49,14 @@
                         <field name="state" widget="statusbar" statusbar_visible="open,closed"/>
                     </header>
                     <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_view_period_batches" type="object" class="oe_stat_button" icon="fa-files-o">
+                                <field name="existing_batch_count" widget="statinfo" string="ملفات الفترة"/>
+                            </button>
+                            <button name="action_view_blocked_batches" type="object" class="oe_stat_button" icon="fa-lock" attrs="{'invisible':[('blocked_driver_count','=',0)]}">
+                                <field name="blocked_driver_count" widget="statinfo" string="ملفات مقفلة"/>
+                            </button>
+                        </div>
                         <div class="oe_title">
                             <label for="name"/>
                             <h1><field name="name" readonly="1"/></h1>
@@ -54,8 +65,13 @@
                             <group string="الفترة">
                                 <field name="month_name"/>
                                 <field name="year"/>
-                                <field name="company_id" groups="base.group_multi_company"
-                                      />
+                                <field name="company_id"/>
+                            </group>
+                            <group string="حالة السائقين">
+                                <field name="app_driver_count" readonly="1"/>
+                                <field name="allowed_driver_count" readonly="1"/>
+                                <field name="blocked_driver_count" readonly="1"/>
+                                <field name="existing_batch_count" readonly="1"/>
                             </group>
                             <group string="سجل التحكم">
                                 <field name="opened_by" readonly="1"/>
@@ -80,6 +96,7 @@
                     <field name="month_name"/>
                     <field name="year"/>
                     <field name="state"/>
+                    <field name="company_id"/>
                     <filter string="مفتوحة" name="period_open" domain="[('state','=','open')]"/>
                     <filter string="مقفلة" name="period_closed" domain="[('state','=','closed')]"/>
                     <group expand="0" string="تجميع حسب">
