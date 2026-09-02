@@ -20,6 +20,7 @@
 - `GET /api/driver/v1/destinations?source_id=4`
 - `POST /api/driver/v1/deliveries`
 - `GET /api/driver/v1/delivery-periods`
+- `GET /api/driver/v1/delivery-period-options` — returns only periods currently allowed by Odoo for new delivery submission.
 - `GET /api/driver/v1/current-batch?month=8&year=2026`
 - `POST /api/driver/v1/complete-period`
 

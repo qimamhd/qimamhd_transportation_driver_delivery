@@ -171,9 +171,24 @@ class DriverAppDeliveryAPI(http.Controller):
         }
 
     def _get_or_create_batch(self, driver, request_date):
+        """Resolve the monthly batch under the server-controlled period policy.
+
+        Current period:
+            - a missing batch is created on the first delivery;
+            - an existing batch must still be draft.
+
+        Historical period:
+            - it is NEVER auto-created by the mobile API;
+            - a manager must explicitly create/reopen that driver's batch in
+              Odoo, leaving it in draft, before the app may submit to it.
+
+        This keeps old accounting periods from being silently reopened by a
+        stale or manipulated mobile client.
+        """
         month = '%02d' % request_date.month
         year = request_date.year
         company = driver.company_id
+        today = fields.Date.today()
 
         Batch = request.env['trnsp.store.driver.request.batch'].sudo()
         batch = Batch.search([
@@ -187,15 +202,29 @@ class DriverAppDeliveryAPI(http.Controller):
             if batch.state != 'draft':
                 return False, error(
                     'PERIOD_LOCKED',
-                    'ملف هذا الشهر غير مفتوح لاستقبال توصيلات جديدة.',
+                    'هذه الفترة مقفلة ولا تستقبل توصيلات جديدة.',
                     status=409,
                     details={
                         'batch_id': batch.id,
                         'batch_name': batch.name,
                         'state': batch.state,
+                        'period_month': request_date.month,
+                        'period_year': request_date.year,
                     }
                 )
             return batch, None
+
+        if (request_date.year, request_date.month) < (today.year, today.month):
+            return False, error(
+                'PERIOD_NOT_OPEN',
+                'الفترة السابقة غير مفتوحة من الإدارة لاستقبال توصيلات جديدة.',
+                status=409,
+                details={
+                    'period_month': request_date.month,
+                    'period_year': request_date.year,
+                    'server_date': fields.Date.to_string(today),
+                },
+            )
 
         branch_id = driver_branch_id(driver)
         if not branch_id:
@@ -517,11 +546,19 @@ class DriverAppDeliveryAPI(http.Controller):
         type='http', auth='public', methods=['GET'], csrf=False
     )
     def delivery_period_options(self, months_back=24, **kwargs):
-        """Return selectable current/past periods without creating batches.
+        """Return only periods the authenticated driver may submit to.
 
-        This lets the mobile app work in October while the driver intentionally
-        completes September.  A missing batch is a valid selectable period; it
-        will be created only when the first delivery is submitted.
+        The mobile app does not invent historical months anymore.  Odoo is the
+        authority:
+
+        * the current month is selectable while its batch is missing or draft;
+        * a past month is selectable only when an existing batch for this
+          driver/company is explicitly in draft (created or reopened by the
+          back office);
+        * closed/reviewed/approved/transferred/cancelled periods are omitted.
+
+        ``months_back`` remains accepted for backward compatibility and only
+        limits how far back already-open historical batches are returned.
         """
         auth, response = authenticate_driver()
         if response:
@@ -535,51 +572,83 @@ class DriverAppDeliveryAPI(http.Controller):
         months_back = max(0, min(months_back, 60))
 
         today = fields.Date.today()
+        current_key = (today.year, today.month)
+        minimum_total = today.year * 12 + (today.month - 1) - months_back
+
         Batch = request.env['trnsp.store.driver.request.batch'].sudo()
-        existing = Batch.search([
+        batches = Batch.search([
             ('driver_id', '=', driver.id),
             ('company_id', '=', driver.company_id.id),
-        ])
-        existing_map = {(int(b.month_name), b.year): b for b in existing}
-        counts_map = self._period_counts(existing.ids)
+            ('state', '=', 'draft'),
+        ], order='year desc, month_name desc, id desc')
 
+        eligible_batches = []
+        for batch in batches:
+            batch_month = int(batch.month_name)
+            batch_key = (batch.year, batch_month)
+            batch_total = batch.year * 12 + (batch_month - 1)
+            if batch_key > current_key:
+                continue
+            if batch_total < minimum_total:
+                continue
+            eligible_batches.append(batch)
+
+        counts_map = self._period_counts([batch.id for batch in eligible_batches])
         periods = []
-        year_value = today.year
-        month_value = today.month
-        for offset in range(months_back + 1):
-            total = today.year * 12 + (today.month - 1) - offset
-            year_value = total // 12
-            month_value = (total % 12) + 1
-            batch = existing_map.get((month_value, year_value))
-            if batch:
-                item = self._batch_summary(batch, today, counts_map.get(batch.id))
-            else:
-                item = {
-                    'batch_id': None,
-                    'batch_name': None,
-                    'month': month_value,
-                    'year': year_value,
-                    'state': None,
-                    'position': 'current' if offset == 0 else 'past',
-                    'is_current': offset == 0,
-                    'is_past': offset > 0,
-                    'is_open': True,
-                    'needs_attention': False,
-                    'can_add_delivery': True,
-                    'can_close': False,
-                    'total_count': 0,
-                    'pending_count': 0,
-                    'accepted_count': 0,
-                    'rejected_count': 0,
-                    'gps_valid_count': 0,
-                    'gps_invalid_count': 0,
-                }
-            periods.append(item)
+
+        current_batch = next((
+            batch for batch in eligible_batches
+            if batch.year == today.year and int(batch.month_name) == today.month
+        ), None)
+        any_current_batch = Batch.search([
+            ('driver_id', '=', driver.id),
+            ('company_id', '=', driver.company_id.id),
+            ('month_name', '=', '%02d' % today.month),
+            ('year', '=', today.year),
+        ], limit=1)
+
+        # A missing current batch is intentionally allowed and will be created
+        # by POST /deliveries on the first successful submission. If the
+        # current batch already exists but is closed, the current period is not
+        # offered to the app.
+        if current_batch:
+            periods.append(self._batch_summary(
+                current_batch, today, counts_map.get(current_batch.id)
+            ))
+        elif not any_current_batch:
+            periods.append({
+                'batch_id': None,
+                'batch_name': None,
+                'month': today.month,
+                'year': today.year,
+                'state': None,
+                'position': 'current',
+                'is_current': True,
+                'is_past': False,
+                'is_open': True,
+                'needs_attention': False,
+                'can_add_delivery': True,
+                'can_close': False,
+                'total_count': 0,
+                'pending_count': 0,
+                'accepted_count': 0,
+                'rejected_count': 0,
+                'gps_valid_count': 0,
+                'gps_invalid_count': 0,
+            })
+
+        for batch in eligible_batches:
+            if batch.year == today.year and int(batch.month_name) == today.month:
+                continue
+            periods.append(self._batch_summary(
+                batch, today, counts_map.get(batch.id)
+            ))
 
         return ok({
             'server_date': fields.Date.to_string(today),
             'current_period': {'month': today.month, 'year': today.year},
             'months_back': months_back,
+            'policy': 'server_allowed_only',
             'periods': periods,
         })
 
