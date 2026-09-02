@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <record id="trnsp_driver_delivery_exception_accept_wizard_form" model="ir.ui.view">
+            <field name="name">trnsp.driver.delivery.exception.accept.wizard.form</field>
+            <field name="model">trnsp.driver.delivery.exception.accept.wizard</field>
+            <field name="arch" type="xml">
+                <form string="قبول استثنائي خارج النطاق">
+                    <group>
+                        <field name="line_id"/>
+                        <field name="reason" placeholder="اكتب سبب قبول التوصيلة رغم أنها خارج نطاق GPS..."/>
+                    </group>
+                    <div class="alert alert-warning" role="alert">
+                        سيبقى سجل GPS موضحاً أن التوصيلة خارج النطاق، وسيتم حفظ اسم المدير ووقت وسبب القبول الاستثنائي للمراجعة اللاحقة.
+                    </div>
+                    <footer>
+                        <button name="action_confirm" string="تأكيد القبول الاستثنائي" type="object" class="btn-primary"/>
+                        <button string="إلغاء" special="cancel" class="btn-secondary"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+    </data>
+</odoo>

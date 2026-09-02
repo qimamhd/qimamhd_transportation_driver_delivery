@@ -3,3 +3,5 @@ from . import hr_employee
 from . import store_driver_request
 from . import app_session
 from . import delivery_period
+
+from . import exception_accept_wizard

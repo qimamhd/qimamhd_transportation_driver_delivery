@@ -317,7 +317,7 @@ class StoreDriverRequestBatch(models.Model):
                 )
 
             invalid_accepted = accepted.filtered(
-                lambda x: not x.gps_valid
+                lambda x: not x.gps_valid and not x.gps_exception_approved
             )
             if invalid_accepted:
                 raise ValidationError(
@@ -360,7 +360,7 @@ class StoreDriverRequestBatch(models.Model):
             if not accepted:
                 raise ValidationError(_('لا توجد توصيلات مقبولة للتحويل.'))
 
-            invalid = accepted.filtered(lambda line: not line.gps_valid)
+            invalid = accepted.filtered(lambda line: not line.gps_valid and not line.gps_exception_approved)
             if invalid:
                 raise ValidationError(
                     _('لا يمكن التحويل لأن هناك توصيلة مقبولة خارج نطاق GPS.')
@@ -783,6 +783,29 @@ class StoreDriverRequestLine(models.Model):
         string='داخل نطاق GPS',
         readonly=True
     )
+    gps_exception_approved = fields.Boolean(
+        string='قبول استثنائي خارج النطاق',
+        readonly=True,
+        copy=False,
+        default=False,
+        help='يبقى GPS غير صالح كما هو، ويشير هذا الحقل فقط إلى أن مدير الطلبات وافق استثنائياً على التوصيلة.'
+    )
+    gps_exception_reason = fields.Text(
+        string='سبب القبول الاستثنائي',
+        readonly=True,
+        copy=False
+    )
+    gps_exception_user_id = fields.Many2one(
+        'res.users',
+        string='اعتمد الاستثناء بواسطة',
+        readonly=True,
+        copy=False
+    )
+    gps_exception_date = fields.Datetime(
+        string='تاريخ القبول الاستثنائي',
+        readonly=True,
+        copy=False
+    )
 
     review_state = fields.Selection([
         ('pending', 'بانتظار المراجعة'),
@@ -796,7 +819,7 @@ class StoreDriverRequestLine(models.Model):
     @api.onchange('review_state')
     def _onchange_review_state_gps_guard(self):
         for rec in self:
-            if rec.review_state == 'accepted' and not rec.gps_valid:
+            if rec.review_state == 'accepted' and not rec.gps_valid and not rec.gps_exception_approved:
                 rec.review_state = 'pending'
                 return {
                     'warning': {
@@ -808,10 +831,10 @@ class StoreDriverRequestLine(models.Model):
                     }
                 }
 
-    @api.constrains('review_state', 'gps_valid')
+    @api.constrains('review_state', 'gps_valid', 'gps_exception_approved')
     def _check_accepted_requires_valid_gps(self):
         for rec in self:
-            if rec.review_state == 'accepted' and not rec.gps_valid:
+            if rec.review_state == 'accepted' and not rec.gps_valid and not rec.gps_exception_approved:
                 raise ValidationError(
                     _(
                         'لا يمكن حفظ التوصيلة كمقبولة لأنها خارج نطاق GPS '
@@ -826,6 +849,34 @@ class StoreDriverRequestLine(models.Model):
             raise AccessError(
                 _('ليس لديك صلاحية مراجعة طلبات تطبيق السائقين.')
             )
+
+    def _check_manager_access(self):
+        if not self.env.user.has_group(
+            'qimamhd_transportation_driver_delivery.group_driver_request_manager'
+        ):
+            raise AccessError(
+                _('ليس لديك صلاحية مدير طلبات تطبيق السائقين لتنفيذ القبول الاستثنائي.')
+            )
+
+    def action_open_exception_accept(self):
+        self.ensure_one()
+        self._check_manager_access()
+        if self.batch_id.state != 'review':
+            raise ValidationError(_('القبول الاستثنائي متاح فقط أثناء حالة قيد المراجعة.'))
+        if self.gps_valid:
+            raise ValidationError(_('هذه التوصيلة داخل نطاق GPS؛ استخدم زر القبول العادي.'))
+        if self.review_state == 'accepted' and self.gps_exception_approved:
+            raise ValidationError(_('هذه التوصيلة مقبولة استثنائياً بالفعل.'))
+        return {
+            'name': _('قبول استثنائي خارج النطاق'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'trnsp.driver.delivery.exception.accept.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_line_id': self.id,
+            },
+        }
 
     def action_accept_line(self):
         self._check_reviewer_access()
@@ -844,6 +895,10 @@ class StoreDriverRequestLine(models.Model):
             rec.with_context(driver_delivery_workflow_write=True).write({
                 'review_state': 'accepted',
                 'reject_reason': False,
+                'gps_exception_approved': False,
+                'gps_exception_reason': False,
+                'gps_exception_user_id': False,
+                'gps_exception_date': False,
             })
         return True
 
@@ -856,6 +911,10 @@ class StoreDriverRequestLine(models.Model):
                 )
             rec.with_context(driver_delivery_workflow_write=True).write({
                 'review_state': 'rejected',
+                'gps_exception_approved': False,
+                'gps_exception_reason': False,
+                'gps_exception_user_id': False,
+                'gps_exception_date': False,
             })
         return True
 
@@ -869,6 +928,10 @@ class StoreDriverRequestLine(models.Model):
             rec.with_context(driver_delivery_workflow_write=True).write({
                 'review_state': 'pending',
                 'reject_reason': False,
+                'gps_exception_approved': False,
+                'gps_exception_reason': False,
+                'gps_exception_user_id': False,
+                'gps_exception_date': False,
             })
         return True
     reject_reason = fields.Char(
@@ -1196,7 +1259,11 @@ class StoreDriverRequestLine(models.Model):
                         _('لا يمكن تعديل بيانات التوصيلة بعد بدء المراجعة.')
                     )
 
-        review_fields = {'review_state', 'reject_reason'}
+        review_fields = {
+            'review_state', 'reject_reason',
+            'gps_exception_approved', 'gps_exception_reason',
+            'gps_exception_user_id', 'gps_exception_date',
+        }
         if (
             review_fields.intersection(vals.keys())
             and not self.env.context.get('driver_delivery_workflow_write')
@@ -1214,15 +1281,29 @@ class StoreDriverRequestLine(models.Model):
                         _('ملاحظات الإدارة يمكن تعديلها فقط أثناء المراجعة أو بعد الاعتماد.')
                     )
 
+        if vals.get('gps_exception_approved') or self.env.context.get('driver_delivery_exception_accept'):
+            if not self.env.user.has_group(
+                'qimamhd_transportation_driver_delivery.group_driver_request_manager'
+            ):
+                raise AccessError(_('القبول الاستثنائي خارج النطاق متاح لمدير طلبات تطبيق السائقين فقط.'))
+
         if vals.get('review_state') == 'accepted':
             invalid_gps = self.filtered(lambda rec: not rec.gps_valid)
             if invalid_gps:
-                raise ValidationError(
-                    _(
-                        'لا يمكن قبول توصيلة خارج نطاق GPS أو بدون إعداد GPS. '
-                        'ارفض التوصيلة أو صحح إعدادات الموقع أولاً.'
-                    )
+                exception_ok = (
+                    self.env.context.get('driver_delivery_exception_accept')
+                    and vals.get('gps_exception_approved')
+                    and vals.get('gps_exception_reason')
+                    and vals.get('gps_exception_user_id')
+                    and vals.get('gps_exception_date')
                 )
+                if not exception_ok:
+                    raise ValidationError(
+                        _(
+                            'لا يمكن قبول توصيلة خارج نطاق GPS بالقبول العادي. '
+                            'يجب على مدير الطلبات استخدام القبول الاستثنائي مع إدخال السبب.'
+                        )
+                    )
 
         if vals.get('review_state') == 'rejected' and not vals.get('reject_reason'):
             # Inline tree may send the reason in a separate write; final approval

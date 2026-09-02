@@ -141,6 +141,7 @@
                                         <field name="allowed_radius" optional="hide" readonly="1"/>
                                         <field name="gps_distance" readonly="1"/>
                                         <field name="gps_valid" readonly="1"/>
+                                        <field name="gps_exception_approved" string="قبول استثنائي" readonly="1"/>
                                         <field name="review_state" readonly="1"/>
                                         <field name="reject_reason"
                                                attrs="{'readonly':[('parent.state','!=','review')], 'invisible':[('review_state','!=','rejected')]}"/>
@@ -150,6 +151,12 @@
                                                 class="oe_highlight"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
                                                 attrs="{'invisible':['|','|',('parent.state','!=','review'),('gps_valid','=',False),('review_state','=','accepted')]}"/>
+                                        <button name="action_open_exception_accept"
+                                                string="قبول استثنائي"
+                                                type="object"
+                                                class="oe_highlight"
+                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
+                                                attrs="{'invisible':['|','|',('parent.state','!=','review'),('gps_valid','=',True),('review_state','=','accepted')]}"/>
                                         <button name="action_reject_line"
                                                 string="رفض"
                                                 type="object"
@@ -164,6 +171,9 @@
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"
                                                attrs="{'readonly':[('parent.state','not in',['review','approved'])]}"/>
+                                        <field name="gps_exception_reason" optional="hide" readonly="1"/>
+                                        <field name="gps_exception_user_id" optional="hide" readonly="1"/>
+                                        <field name="gps_exception_date" optional="hide" readonly="1"/>
                                         <field name="server_received_at" optional="hide" readonly="1"/>
                                         <field name="pricing_line_id" optional="hide" readonly="1"/>
                                         <field name="settlement_id" optional="hide" readonly="1"/>
