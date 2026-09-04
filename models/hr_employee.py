@@ -203,6 +203,18 @@ class HrEmployeeDriverApp(models.Model):
             if sessions:
                 sessions.write({'revoked': True})
 
+            # Password/identity/access/biometric policy changes must also revoke
+            # persistent device credentials so biometric login can never bypass
+            # an administrator's security change.
+            biometric_credentials = self.env[
+                'trnsp.driver.biometric.credential'
+            ].sudo().search([
+                ('employee_id', 'in', self.ids),
+                ('revoked', '=', False),
+            ])
+            if biometric_credentials:
+                biometric_credentials.write({'revoked': True})
+
         return result
 
     def _validate_app_access_configuration(self):

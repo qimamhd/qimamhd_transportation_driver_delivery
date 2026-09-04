@@ -46,3 +46,8 @@ A final install/upgrade on an Odoo 13 test database is still required because in
 - Hardened concurrent monthly-batch creation and delivery UUID idempotency races using existing SQL uniqueness and savepoints.
 - Kept the approved login, GPS, monthly review, settlement transfer, rollback, and manager-unlock concepts unchanged.
 - Production still requires HTTPS + reverse proxy rate limiting/firewall hardening; see `README_v13_4_2_0_SECURITY_RC.md`.
+
+## 13.0.4.7.0
+- Persistent biometric device credentials independent from normal app sessions.
+- Biometric enroll/login/revoke API routes.
+- Driver dashboard summary API with year comparison and grouped monthly stats.

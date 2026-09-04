@@ -112,3 +112,9 @@ diagnostics only and must be removed before production deployment.
 - The temporary `login_test` endpoint was removed in v13.0.4.2.0 and must not exist in production.
 
 - `GET /api/driver/v1/branding` — public presentation-only company name/logo for the pre-login screen.
+
+## Added in 13.0.4.7.0
+- `POST /api/driver/v1/biometric/enroll` — create/rotate a persistent device biometric credential for the authenticated driver.
+- `POST /api/driver/v1/biometric/login` — exchange the device biometric credential for a fresh normal app session after OS biometric verification on the mobile side.
+- `POST /api/driver/v1/biometric/revoke` — revoke this driver's biometric credential for the supplied device.
+- `GET /api/driver/v1/dashboard?year=2026` — lightweight grouped driver statistics; returns current year, previous-year comparison, monthly counts, and review-state totals.
