@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_company_form_driver_app_settings" model="ir.ui.view">
+        <field name="name">res.company.form.driver.app.settings</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="إعدادات تطبيق السائق" name="driver_app_settings">
+                    <group>
+                        <group string="سياسات التوصيلة">
+                            <field name="driver_app_timezone"/>
+                            <field name="driver_app_gps_policy"/>
+                            <field name="driver_app_datetime_policy"/>
+                            <field name="driver_app_allow_offline"/>
+                        </group>
+                        <group string="سياسات الفترات">
+                            <field name="driver_app_period_policy"/>
+                            <field name="driver_app_auto_close_previous_months"/>
+                        </group>
+                    </group>
+                    <separator string="الإعداد الافتراضي الموصى به"/>
+                    <div class="alert alert-info" role="alert">
+                        <strong>الافتراضي:</strong>
+                        داخل نطاق GPS فقط، الشهر الحالي فقط، اتصال إنترنت إلزامي، تاريخ ووقت السيرفر، وإغلاق الأشهر السابقة تلقائيًا.
+                        يمكن تغيير كل سياسة بشكل مستقل عند حاجة الشركة، مع بقاء الحماية النهائية في API السيرفر.
+                    </div>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

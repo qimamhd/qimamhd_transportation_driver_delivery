@@ -40,6 +40,10 @@ class DriverDeliveryPeriod(models.Model):
     closed_by = fields.Many2one('res.users', string='إغلاق بواسطة', readonly=True)
     closed_at = fields.Datetime(string='تاريخ الإغلاق', readonly=True)
     notes = fields.Text(string='ملاحظات الإدارة')
+    manual_reopened = fields.Boolean(
+        string='أعيد فتحها يدويًا', readonly=True, copy=False, default=False,
+        help='تمنع الإغلاق الآلي لهذه الفترة بعد أن تعيد الإدارة فتح فترة سابقة يدويًا.'
+    )
 
     app_driver_count = fields.Integer(
         string='سائقو التطبيق',
@@ -171,12 +175,15 @@ class DriverDeliveryPeriod(models.Model):
         for rec in self:
             if rec.state == 'open':
                 continue
+            now = rec.company_id._driver_app_local_now()
+            is_past = (rec.year, int(rec.month_name)) < (now.year, now.month)
             rec.with_context(period_control_write=True).write({
                 'state': 'open',
                 'opened_by': self.env.user.id,
                 'opened_at': fields.Datetime.now(),
                 'closed_by': False,
                 'closed_at': False,
+                'manual_reopened': bool(is_past),
             })
         return True
 
@@ -189,6 +196,7 @@ class DriverDeliveryPeriod(models.Model):
                 'state': 'closed',
                 'closed_by': self.env.user.id,
                 'closed_at': fields.Datetime.now(),
+                'manual_reopened': False,
             })
         return True
 

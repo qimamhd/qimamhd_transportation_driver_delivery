@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import re
+import math
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import ValidationError
@@ -170,7 +171,50 @@ class DriverAppDeliveryAPI(http.Controller):
             'gps_invalid_count': counts['gps_invalid_count'],
         }
 
-    def _get_or_create_batch(self, driver, request_date):
+    @staticmethod
+    def _haversine_meters(lat1, lon1, lat2, lon2):
+        radius = 6371000.0
+        p1 = math.radians(lat1)
+        p2 = math.radians(lat2)
+        dp = math.radians(lat2 - lat1)
+        dl = math.radians(lon2 - lon1)
+        a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
+        return radius * 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+
+    @staticmethod
+    def _company_policy(company):
+        return company.sudo()._driver_app_policy_payload()
+
+    def _validate_gps_before_create(self, company, pricing_line, latitude, longitude):
+        gps_mode = company.driver_app_gps_policy or 'strict'
+        dest_lat = float(pricing_line.gbs_from or 0.0)
+        dest_lon = float(pricing_line.gbs_to or 0.0)
+        allowed_radius = float(pricing_line.gps_radius or 0.0)
+        configured = (
+            allowed_radius > 0
+            and -90.0 <= dest_lat <= 90.0
+            and -180.0 <= dest_lon <= 180.0
+            and (dest_lat != 0.0 or dest_lon != 0.0)
+        )
+        distance = None
+        inside = False
+        if configured:
+            distance = self._haversine_meters(latitude, longitude, dest_lat, dest_lon)
+            inside = distance <= allowed_radius
+        if gps_mode == 'strict' and not inside:
+            return error(
+                'GPS_OUTSIDE_ALLOWED_RANGE',
+                'لا يمكن تسجيل التوصيلة لأن موقعك خارج نطاق GPS المسموح للوجهة.',
+                status=409,
+                details={
+                    'gps_configured': configured,
+                    'gps_distance': distance,
+                    'allowed_radius': allowed_radius,
+                },
+            )
+        return None
+
+    def _get_or_create_batch(self, driver, request_date, policy=None):
         """Resolve/create the driver batch under the company period control.
 
         A delivery period must explicitly exist and be ``open`` for the
@@ -185,24 +229,26 @@ class DriverAppDeliveryAPI(http.Controller):
         month = '%02d' % request_date.month
         year = request_date.year
         company = driver.company_id
+        policy = policy or self._company_policy(company)
 
-        Period = request.env['trnsp.driver.delivery.period'].sudo()
-        period = Period.search([
-            ('company_id', '=', company.id),
-            ('month_name', '=', month),
-            ('year', '=', year),
-        ], limit=1)
-        if not period or period.state != 'open':
-            return False, error(
-                'PERIOD_NOT_OPEN',
-                'هذه الفترة غير مفتوحة من الإدارة لاستقبال التوصيلات.',
-                status=409,
-                details={
-                    'period_month': request_date.month,
-                    'period_year': request_date.year,
-                    'period_state': period.state if period else None,
-                },
-            )
+        if policy.get('period_mode') == 'backend_periods':
+            Period = request.env['trnsp.driver.delivery.period'].sudo()
+            period = Period.search([
+                ('company_id', '=', company.id),
+                ('month_name', '=', month),
+                ('year', '=', year),
+            ], limit=1)
+            if not period or period.state != 'open':
+                return False, error(
+                    'PERIOD_NOT_OPEN',
+                    'هذه الفترة غير مفتوحة من الإدارة لاستقبال التوصيلات.',
+                    status=409,
+                    details={
+                        'period_month': request_date.month,
+                        'period_year': request_date.year,
+                        'period_state': period.state if period else None,
+                    },
+                )
 
         Batch = request.env['trnsp.store.driver.request.batch'].sudo()
         batch = Batch.search([
@@ -268,6 +314,18 @@ class DriverAppDeliveryAPI(http.Controller):
         return batch, None
 
     @http.route(
+        '/api/driver/v1/app-policy',
+        type='http', auth='public', methods=['GET'], csrf=False
+    )
+    def app_policy(self, **kwargs):
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, session = auth
+        driver.company_id.sudo()._driver_app_auto_close_previous()
+        return ok(driver.company_id.sudo()._driver_app_policy_payload())
+
+    @http.route(
         '/api/driver/v1/deliveries',
         type='json', auth='public', methods=['POST'], csrf=False
     )
@@ -276,6 +334,9 @@ class DriverAppDeliveryAPI(http.Controller):
         if response:
             return response
         driver, session = auth
+        company = driver.company_id.sudo()
+        company._driver_app_auto_close_previous()
+        policy = self._company_policy(company)
 
         if request_payload_too_large(32 * 1024):
             return error(
@@ -312,13 +373,22 @@ class DriverAppDeliveryAPI(http.Controller):
                 'duplicate': True,
             }, message='التوصيلة مسجلة مسبقًا.')
 
-        required = ['source_id', 'destination_id', 'car_id', 'date', 'time', 'latitude', 'longitude']
+        required = ['source_id', 'destination_id', 'car_id', 'latitude', 'longitude']
+        if policy.get('datetime_mode') == 'driver_select':
+            required += ['date', 'time']
         missing = [name for name in required if data.get(name) in (None, '')]
         if missing:
             return error(
                 'MISSING_FIELDS',
                 'حقول مطلوبة غير مرسلة.',
                 details={'fields': missing},
+            )
+
+        if not policy.get('allow_offline') and data.get('submission_mode') != 'online':
+            return error(
+                'ONLINE_SUBMISSION_REQUIRED',
+                'إعدادات الشركة تتطلب اتصالًا مباشرًا بالإنترنت عند تسجيل التوصيلة.',
+                status=409,
             )
 
         try:
@@ -330,64 +400,63 @@ class DriverAppDeliveryAPI(http.Controller):
         except (ValueError, TypeError) as exc:
             return error('INVALID_INPUT', str(exc))
 
-        try:
-            request_date = fields.Date.from_string(data.get('date'))
-        except (ValueError, TypeError):
-            return error(
-                'INVALID_DATE',
-                'التاريخ غير صحيح. استخدم الصيغة YYYY-MM-DD.'
-            )
-        if not request_date:
-            return error(
-                'INVALID_DATE',
-                'التاريخ غير صحيح. استخدم الصيغة YYYY-MM-DD.'
-            )
+        if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+            return error('INVALID_GPS', 'إحداثيات السائق خارج النطاق الصحيح.')
 
-        server_today = fields.Date.today()
-        if request_date > server_today:
-            return error(
-                'FUTURE_DELIVERY_DATE',
-                'لا يمكن تسجيل توصيلة بتاريخ مستقبلي.',
-                status=409,
-                details={
-                    'server_date': fields.Date.to_string(server_today),
-                    'requested_date': fields.Date.to_string(request_date),
-                },
-            )
-
-        # Optional period context is additive/backward-compatible.  When a
-        # newer mobile client explicitly selects a month/year, require the
-        # delivery date to belong to that period so a UI selection can never
-        # accidentally write into another monthly batch.
-        selected_month = data.get('period_month')
-        selected_year = data.get('period_year')
-        if selected_month not in (None, '') or selected_year not in (None, ''):
-            period_month, period_year = self._validate_period(
-                selected_month, selected_year
-            )
-            if not period_month:
-                return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
-            if request_date.month != period_month or request_date.year != period_year:
+        local_now = company._driver_app_local_now()
+        server_today = local_now.date()
+        if policy.get('datetime_mode') == 'server_now':
+            request_date = server_today
+            request_time = local_now.strftime('%H:%M:%S')
+        else:
+            try:
+                request_date = fields.Date.from_string(data.get('date'))
+            except (ValueError, TypeError):
+                request_date = False
+            if not request_date:
+                return error('INVALID_DATE', 'التاريخ غير صحيح. استخدم الصيغة YYYY-MM-DD.')
+            if request_date > server_today:
                 return error(
-                    'DELIVERY_DATE_PERIOD_MISMATCH',
-                    'تاريخ التوصيلة لا ينتمي إلى الفترة المحددة.',
+                    'FUTURE_DELIVERY_DATE',
+                    'لا يمكن تسجيل توصيلة بتاريخ مستقبلي.',
                     status=409,
                     details={
-                        'period_month': period_month,
-                        'period_year': period_year,
+                        'server_date': fields.Date.to_string(server_today),
                         'requested_date': fields.Date.to_string(request_date),
                     },
                 )
+            request_time = self._normalize_and_validate_time(data.get('time'))
+            if not request_time:
+                return error('INVALID_TIME', 'الوقت غير صحيح. استخدم HH:MM أو HH:MM:SS.')
 
-        request_time = self._normalize_and_validate_time(data.get('time'))
-        if not request_time:
-            return error(
-                'INVALID_TIME',
-                'الوقت غير صحيح. استخدم HH:MM أو HH:MM:SS.'
-            )
-
-        if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
-            return error('INVALID_GPS', 'إحداثيات السائق خارج النطاق الصحيح.')
+        if policy.get('period_mode') == 'current_month':
+            if (request_date.year, request_date.month) != (server_today.year, server_today.month):
+                return error(
+                    'CURRENT_MONTH_ONLY',
+                    'إعدادات الشركة تسمح بالتسجيل للشهر الحالي فقط.',
+                    status=409,
+                    details={
+                        'server_month': server_today.month,
+                        'server_year': server_today.year,
+                        'requested_date': fields.Date.to_string(request_date),
+                    },
+                )
+            # Any client-supplied period is advisory only in current-month mode.
+            # A changed phone clock cannot move the delivery into another month.
+            period_month, period_year = server_today.month, server_today.year
+        else:
+            selected_month = data.get('period_month')
+            selected_year = data.get('period_year')
+            if selected_month not in (None, '') or selected_year not in (None, ''):
+                period_month, period_year = self._validate_period(selected_month, selected_year)
+                if not period_month:
+                    return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
+                if request_date.month != period_month or request_date.year != period_year:
+                    return error(
+                        'DELIVERY_DATE_PERIOD_MISMATCH',
+                        'تاريخ التوصيلة لا ينتمي إلى الفترة المحددة.',
+                        status=409,
+                    )
 
         Product = request.env['product.product'].sudo()
         car_domain = [('id', '=', car_id), ('car_flag', '=', True)]
@@ -417,7 +486,13 @@ class DriverAppDeliveryAPI(http.Controller):
                 status=409,
             )
 
-        batch, batch_error = self._get_or_create_batch(driver, request_date)
+        gps_error = self._validate_gps_before_create(
+            company, pricing_line, latitude, longitude
+        )
+        if gps_error:
+            return gps_error
+
+        batch, batch_error = self._get_or_create_batch(driver, request_date, policy=policy)
         if batch_error:
             return batch_error
 
@@ -488,6 +563,7 @@ class DriverAppDeliveryAPI(http.Controller):
             'period_year': request_date.year,
             'is_historical_period': (request_date.year, request_date.month) < (server_today.year, server_today.month),
             'duplicate': False,
+            'policy': policy,
         }, message='تم تسجيل التوصيلة.', status=201)
 
     @http.route(
@@ -559,6 +635,38 @@ class DriverAppDeliveryAPI(http.Controller):
         if response:
             return response
         driver, session = auth
+        company = driver.company_id.sudo()
+        company._driver_app_auto_close_previous()
+        policy = self._company_policy(company)
+        today = company._driver_app_local_now().date()
+
+        if policy.get('period_mode') == 'current_month':
+            Batch = request.env['trnsp.store.driver.request.batch'].sudo()
+            batch = Batch.search([
+                ('driver_id', '=', driver.id),
+                ('company_id', '=', company.id),
+                ('month_name', '=', '%02d' % today.month),
+                ('year', '=', today.year),
+            ], limit=1)
+            if batch:
+                counts_map = self._period_counts([batch.id])
+                summary = self._batch_summary(batch, today, counts_map.get(batch.id))
+            else:
+                summary = {
+                    'batch_id': None, 'batch_name': None, 'month': today.month, 'year': today.year,
+                    'state': None, 'position': 'current', 'is_current': True, 'is_past': False,
+                    'is_open': True, 'needs_attention': False, 'can_add_delivery': True,
+                    'can_close': False, 'total_count': 0, 'pending_count': 0,
+                    'accepted_count': 0, 'rejected_count': 0, 'gps_valid_count': 0,
+                    'gps_invalid_count': 0,
+                }
+            return ok({
+                'server_date': fields.Date.to_string(today),
+                'current_period': {'month': today.month, 'year': today.year},
+                'months_back': 0,
+                'policy': 'current_month',
+                'periods': [summary] if summary.get('can_add_delivery') else [],
+            })
 
         try:
             months_back = int(months_back or 24)
@@ -566,7 +674,6 @@ class DriverAppDeliveryAPI(http.Controller):
             return error('INVALID_RANGE', 'نطاق الأشهر غير صحيح.')
         months_back = max(0, min(months_back, 60))
 
-        today = fields.Date.today()
         current_total = today.year * 12 + (today.month - 1)
         minimum_total = current_total - months_back
 
@@ -584,6 +691,8 @@ class DriverAppDeliveryAPI(http.Controller):
             # Future periods are never offered to drivers, even if an
             # administrator created one early.
             if period_total > current_total or period_total < minimum_total:
+                continue
+            if policy.get('datetime_mode') == 'server_now' and period_total != current_total:
                 continue
 
             batch = Batch.search([

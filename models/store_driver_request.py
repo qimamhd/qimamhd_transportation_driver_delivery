@@ -121,6 +121,10 @@ class StoreDriverRequestBatch(models.Model):
         readonly=True,
         track_visibility='onchange'
     )
+    app_manual_reopened = fields.Boolean(
+        string='أعيد فتحه يدويًا', readonly=True, copy=False, default=False,
+        help='إذا أعادت الإدارة فتح ملف شهر سابق يدويًا فلن يقفله الإغلاق الآلي مرة أخرى.'
+    )
 
     line_count = fields.Integer(
         string='عدد التوصيلات',
@@ -627,12 +631,15 @@ class StoreDriverRequestBatch(models.Model):
                 'reject_reason': False,
             })
 
+            now = rec.company_id._driver_app_local_now()
+            is_past = (rec.year, int(rec.month_name)) < (now.year, now.month)
             rec.write({
                 'state': 'draft',
                 'review_user_id': False,
                 'review_date': False,
                 'approve_user_id': False,
                 'approve_date': False,
+                'app_manual_reopened': bool(is_past),
             })
 
     def action_cancel(self):
