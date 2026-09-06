@@ -14,7 +14,7 @@ class ResCompany(models.Model):
         selection=lambda self: [(tz, tz) for tz in pytz.common_timezones],
         string='المنطقة الزمنية المعتمدة للتطبيق',
         required=True,
-        default=lambda self: self.env.user.tz or 'UTC',
+        default='Asia/Riyadh',
         help='تُستخدم لحساب الشهر والتاريخ والوقت الموثوق من السيرفر، ولا يعتمد النظام على ساعة هاتف السائق.'
     )
 
@@ -47,7 +47,7 @@ class ResCompany(models.Model):
 
     def _driver_app_timezone(self):
         self.ensure_one()
-        return self.driver_app_timezone or self.partner_id.tz or self.env.user.tz or 'UTC'
+        return self.driver_app_timezone or 'Asia/Riyadh'
 
     def _driver_app_local_now(self):
         """Trusted current datetime derived from server UTC, localized by company timezone."""
