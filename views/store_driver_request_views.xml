@@ -233,6 +233,9 @@
                     <field name="year"/>
                     <field name="state"/>
 
+                    <filter string="غير المحولة للحسابات" name="filter_not_transferred"
+                            domain="[('state','!=','transferred')]"/>
+
                     <filter string="مفتوحة" name="filter_draft"
                             domain="[('state','=','draft')]"/>
                     <filter string="مكتملة من السائق" name="filter_done"
@@ -261,7 +264,7 @@
             <field name="res_model">trnsp.store.driver.request.batch</field>
             <field name="view_mode">tree,form</field>
             <field name="search_view_id" ref="trnsp_store_driver_request_batch_search"/>
-            <field name="context">{}</field>
+            <field name="context">{'search_default_filter_not_transferred': 1}</field>
         </record>
 
         <menuitem id="menu_trnsp_store_driver_request_batch"
