@@ -274,29 +274,27 @@ class StoreDriverRequestBatch(models.Model):
             })
 
     def action_accept_all(self):
+        """Accept every reviewable line without blocking on GPS exceptions.
+
+        Normal GPS-valid lines are accepted in bulk. Lines that are outside the
+        configured GPS range (or have no valid GPS setup) are deliberately left
+        pending so the reviewer can either reject them or accept them through
+        the existing manager exception workflow. A line that was already
+        accepted exceptionally is left untouched and never blocks this action.
+        """
         for rec in self:
             if rec.state != 'review':
                 raise ValidationError(
                     _('قبول السطور متاح فقط أثناء المراجعة.')
                 )
 
-            invalid = rec.request_lines.filtered(
-                lambda x: not x.gps_valid
-            )
-            if invalid:
-                raise ValidationError(
-                    _(
-                        'يوجد %s توصيلة خارج نطاق GPS أو بدون إعداد GPS. '
-                        'راجعها قبل القبول.'
-                    ) % len(invalid)
-                )
-
             rec.request_lines.filtered(
-                lambda x: x.review_state == 'pending'
-            ).write({
+                lambda x: x.review_state == 'pending' and x.gps_valid
+            ).with_context(driver_delivery_workflow_write=True).write({
                 'review_state': 'accepted',
                 'reject_reason': False,
             })
+        return True
 
     def action_approve(self):
         for rec in self:
@@ -314,6 +312,16 @@ class StoreDriverRequestBatch(models.Model):
                 lambda x: x.review_state == 'pending'
             )
             if pending:
+                pending_gps_problem = pending.filtered(
+                    lambda x: not x.gps_valid and not x.gps_exception_approved
+                )
+                if pending_gps_problem:
+                    raise ValidationError(
+                        _(
+                            'يوجد %s توصيلة خارج نطاق GPS أو بدون إعداد GPS ولم يتم حسمها بعد. '
+                            'استخدم القبول الاستثنائي للتوصيلة التي تريد اعتمادها، أو ارفضها، ثم أعد الاعتماد.'
+                        ) % len(pending_gps_problem)
+                    )
                 raise ValidationError(
                     _('يوجد %s توصيلة لم تتم مراجعتها بعد.') % len(pending)
                 )
