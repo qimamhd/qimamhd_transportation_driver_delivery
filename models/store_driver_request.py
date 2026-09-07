@@ -13,6 +13,12 @@ from odoo.exceptions import AccessError, ValidationError
 class TrnspStorePricingLines(models.Model):
     _inherit = 'trnsp.store.pricing.lines'
 
+    # GPS coordinates must keep enough decimal precision. Two decimal places can
+    # shift a point by roughly a kilometre, which is unsafe for a 200 m radius.
+    # Keep destination coordinates aligned with the driver GPS fields below.
+    gbs_from = fields.Float(digits=(16, 7))
+    gbs_to = fields.Float(digits=(16, 7))
+
     gps_radius = fields.Float(
         string='مجال GPS المسموح (متر)',
         default=200.0,
