@@ -16,3 +16,8 @@ Optional policies can restore the previous behavior without deleting its code:
 - driver date/time selection can be enabled.
 
 Security authority remains server-side. The phone clock cannot move a strict/current-month/server-time delivery into another month.
+
+## 13.0.4.8.3 GPS accuracy hardening
+- New clients may send optional `gps_accuracy` in meters.
+- Strict GPS validation uses `distance + gps_accuracy <= allowed_radius`.
+- Legacy clients without `gps_accuracy` remain backward compatible.

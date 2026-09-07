@@ -185,7 +185,7 @@ class DriverAppDeliveryAPI(http.Controller):
     def _company_policy(company):
         return company.sudo()._driver_app_policy_payload()
 
-    def _validate_gps_before_create(self, company, pricing_line, latitude, longitude):
+    def _validate_gps_before_create(self, company, pricing_line, latitude, longitude, gps_accuracy=0.0):
         gps_mode = company.driver_app_gps_policy or 'strict'
         dest_lat = float(pricing_line.gbs_from or 0.0)
         dest_lon = float(pricing_line.gbs_to or 0.0)
@@ -200,7 +200,13 @@ class DriverAppDeliveryAPI(http.Controller):
         inside = False
         if configured:
             distance = self._haversine_meters(latitude, longitude, dest_lat, dest_lon)
-            inside = distance <= allowed_radius
+            # Conservative safety check for modern mobile clients: the reported
+            # GPS accuracy is an uncertainty radius. A strict delivery is only
+            # considered inside when the distance plus that uncertainty still
+            # fits within the configured destination radius. Legacy clients that
+            # do not send gps_accuracy keep the historical behavior (0 margin).
+            accuracy_margin = max(0.0, float(gps_accuracy or 0.0))
+            inside = (distance + accuracy_margin) <= allowed_radius
         if gps_mode == 'strict' and not inside:
             return error(
                 'GPS_OUTSIDE_ALLOWED_RANGE',
@@ -209,6 +215,8 @@ class DriverAppDeliveryAPI(http.Controller):
                 details={
                     'gps_configured': configured,
                     'gps_distance': distance,
+                    'gps_accuracy': max(0.0, float(gps_accuracy or 0.0)),
+                    'effective_distance': (distance + max(0.0, float(gps_accuracy or 0.0))) if distance is not None else None,
                     'allowed_radius': allowed_radius,
                 },
             )
@@ -397,11 +405,18 @@ class DriverAppDeliveryAPI(http.Controller):
             car_id = int_value(data.get('car_id'), 'car_id')
             latitude = float_value(data.get('latitude'), 'latitude')
             longitude = float_value(data.get('longitude'), 'longitude')
+            gps_accuracy = (
+                float_value(data.get('gps_accuracy'), 'gps_accuracy')
+                if data.get('gps_accuracy') not in (None, '')
+                else 0.0
+            )
         except (ValueError, TypeError) as exc:
             return error('INVALID_INPUT', str(exc))
 
         if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
             return error('INVALID_GPS', 'إحداثيات السائق خارج النطاق الصحيح.')
+        if gps_accuracy < 0 or gps_accuracy > 10000:
+            return error('INVALID_GPS_ACCURACY', 'دقة GPS المرسلة غير صالحة.')
 
         local_now = company._driver_app_local_now()
         server_today = local_now.date()
@@ -487,7 +502,7 @@ class DriverAppDeliveryAPI(http.Controller):
             )
 
         gps_error = self._validate_gps_before_create(
-            company, pricing_line, latitude, longitude
+            company, pricing_line, latitude, longitude, gps_accuracy=gps_accuracy
         )
         if gps_error:
             return gps_error
