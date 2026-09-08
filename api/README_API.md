@@ -129,3 +129,6 @@ JSON-RPC params: `latitude`, `longitude`, `gps_accuracy`.
 The server checks only destinations configured under the driver's source area, chooses the nearest valid destination, and requires the effective GPS distance to be within 50 meters.
 
 Direct-delivery submission to `POST /api/driver/v1/deliveries` must include `submission_context=direct_delivery`. The server re-derives the driver's vehicle area and revalidates car, source, auto-matched destination, and the 50 m GPS rule. Other delivery flows keep their existing behavior.
+
+### Full route defaults / 5 m checkpoint
+The Start New Trip flow reuses `GET /api/driver/v1/direct-delivery/setup` only as the server-authoritative vehicle-area context: assigned vehicle is default, alternative vehicles are limited to the same `car_area_id`, and source is fixed to that area. The driver still selects the destination from that source's configured routes. Final full-route submission uses `submission_context=route_trip`; the server revalidates the vehicle/source relationship and requires `gps_accuracy <= 5 m` while preserving the existing company GPS/radius validation for the selected destination.

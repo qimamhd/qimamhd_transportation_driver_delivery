@@ -7,7 +7,10 @@ from odoo.http import request
 from odoo.exceptions import ValidationError
 from psycopg2 import IntegrityError
 
-from .direct_delivery_logic import validate_direct_delivery_submission
+from .direct_delivery_logic import (
+    validate_direct_delivery_submission,
+    validate_route_trip_submission,
+)
 
 from .common import (
     authenticate_driver,
@@ -431,6 +434,16 @@ class DriverAppDeliveryAPI(http.Controller):
                     direct_failure['code'], direct_failure['message'],
                     status=direct_failure['status'],
                     details=direct_failure.get('details')
+                )
+        elif submission_context == 'route_trip':
+            route_context, route_failure = validate_route_trip_submission(
+                request.env, driver, car_id, source_id, gps_accuracy=gps_accuracy
+            )
+            if route_failure:
+                return error(
+                    route_failure['code'], route_failure['message'],
+                    status=route_failure['status'],
+                    details=route_failure.get('details')
                 )
 
         local_now = company._driver_app_local_now()

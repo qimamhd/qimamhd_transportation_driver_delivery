@@ -251,3 +251,56 @@ def validate_direct_delivery_submission(
         )
 
     return match, None
+
+
+def validate_route_trip_submission(
+    env, driver, car_id, source_id, gps_accuracy=0.0
+):
+    """Validate shared vehicle/source defaults for the full Start New Trip flow.
+
+    Unlike direct delivery, the destination remains explicitly selected by the
+    driver from the source's configured destinations. This validation only
+    locks the vehicle area/source and requires a precise <=5 m checkpoint; the
+    existing company GPS/radius policy continues to validate the selected
+    destination later in delivery_api.py.
+    """
+    context, failure = get_direct_delivery_context(env, driver)
+    if failure:
+        return None, failure
+
+    accuracy = max(0.0, float(gps_accuracy or 0.0))
+    if accuracy <= 0.0 or accuracy > DIRECT_DELIVERY_MAX_GPS_ACCURACY_METERS:
+        return None, _failure(
+            'ROUTE_GPS_ACCURACY_TOO_LOW',
+            'دقة GPS غير كافية لبدء/إنهاء الرحلة. يجب أن تكون 5 متر أو أقل.',
+            status=409,
+            details={
+                'gps_accuracy': accuracy,
+                'max_gps_accuracy': DIRECT_DELIVERY_MAX_GPS_ACCURACY_METERS,
+            },
+        )
+
+    if car_id not in set(context['cars'].ids):
+        return None, _failure(
+            'ROUTE_CAR_OUTSIDE_DRIVER_AREA',
+            'السيارة المحددة ليست من سيارات موقع مركبة السائق.',
+            status=409,
+            details={
+                'car_id': car_id,
+                'source_area_id': context['area'].id,
+                'source_area_name': context['area'].display_name,
+            },
+        )
+
+    if source_id != context['area'].id:
+        return None, _failure(
+            'ROUTE_SOURCE_MISMATCH',
+            'مصدر الرحلة يجب أن يكون موقع مركبة السائق.',
+            status=409,
+            details={
+                'expected_source_id': context['area'].id,
+                'expected_source_name': context['area'].display_name,
+            },
+        )
+
+    return context, None
