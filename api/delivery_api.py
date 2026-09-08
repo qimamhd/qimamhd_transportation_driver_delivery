@@ -7,6 +7,8 @@ from odoo.http import request
 from odoo.exceptions import ValidationError
 from psycopg2 import IntegrityError
 
+from .direct_delivery_logic import validate_direct_delivery_submission
+
 from .common import (
     authenticate_driver,
     company_domain,
@@ -418,6 +420,19 @@ class DriverAppDeliveryAPI(http.Controller):
         if gps_accuracy < 0 or gps_accuracy > 10000:
             return error('INVALID_GPS_ACCURACY', 'دقة GPS المرسلة غير صالحة.')
 
+        submission_context = str(data.get('submission_context') or '').strip()
+        if submission_context == 'direct_delivery':
+            direct_match, direct_failure = validate_direct_delivery_submission(
+                request.env, driver, car_id, source_id, destination_id,
+                latitude, longitude, gps_accuracy=gps_accuracy
+            )
+            if direct_failure:
+                return error(
+                    direct_failure['code'], direct_failure['message'],
+                    status=direct_failure['status'],
+                    details=direct_failure.get('details')
+                )
+
         local_now = company._driver_app_local_now()
         server_today = local_now.date()
         if policy.get('datetime_mode') == 'server_now':
@@ -501,11 +516,16 @@ class DriverAppDeliveryAPI(http.Controller):
                 status=409,
             )
 
-        gps_error = self._validate_gps_before_create(
-            company, pricing_line, latitude, longitude, gps_accuracy=gps_accuracy
-        )
-        if gps_error:
-            return gps_error
+        # Direct delivery has already been server-validated against the
+        # driver's assigned area, the auto-matched destination and its dedicated
+        # 50 m radius. Keep the legacy/company GPS policy untouched for every
+        # other delivery flow.
+        if submission_context != 'direct_delivery':
+            gps_error = self._validate_gps_before_create(
+                company, pricing_line, latitude, longitude, gps_accuracy=gps_accuracy
+            )
+            if gps_error:
+                return gps_error
 
         batch, batch_error = self._get_or_create_batch(driver, request_date, policy=policy)
         if batch_error:
@@ -527,6 +547,12 @@ class DriverAppDeliveryAPI(http.Controller):
         try:
             with request.env.cr.savepoint():
                 line = request.env['trnsp.store.driver.request.line'].sudo().create(line_vals)
+                if submission_context == 'direct_delivery':
+                    # Keep the saved review row aligned with the dedicated
+                    # direct-delivery rule; this does not modify pricing setup
+                    # or the radius used by full-route deliveries.
+                    line.sudo().write({'allowed_radius': 50.0})
+                    line.sudo()._calculate_gps()
         except IntegrityError:
             # The UUID SQL constraint closes the tiny race between the initial
             # idempotency lookup and create(). Return the winning row cleanly.

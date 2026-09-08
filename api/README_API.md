@@ -118,3 +118,14 @@ diagnostics only and must be removed before production deployment.
 - `POST /api/driver/v1/biometric/login` — exchange the device biometric credential for a fresh normal app session after OS biometric verification on the mobile side.
 - `POST /api/driver/v1/biometric/revoke` — revoke this driver's biometric credential for the supplied device.
 - `GET /api/driver/v1/dashboard?year=2026` — lightweight grouped driver statistics; returns current year, previous-year comparison, monthly counts, and review-state totals.
+
+## Direct delivery automatic context (13.0.4.8.7)
+
+### `GET /api/driver/v1/direct-delivery/setup`
+Returns the driver's assigned vehicle, alternative vehicles from the same `car_area_id`, and the fixed source derived from that area.
+
+### `POST /api/driver/v1/direct-delivery/match-destination`
+JSON-RPC params: `latitude`, `longitude`, `gps_accuracy`.
+The server checks only destinations configured under the driver's source area, chooses the nearest valid destination, and requires the effective GPS distance to be within 50 meters.
+
+Direct-delivery submission to `POST /api/driver/v1/deliveries` must include `submission_context=direct_delivery`. The server re-derives the driver's vehicle area and revalidates car, source, auto-matched destination, and the 50 m GPS rule. Other delivery flows keep their existing behavior.
