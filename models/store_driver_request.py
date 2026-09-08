@@ -739,6 +739,12 @@ class StoreDriverRequestLine(models.Model):
         copy=False,
         readonly=True
     )
+    trip_sheet_view_html = fields.Html(
+        string='شيت الرحلة',
+        compute='_compute_trip_sheet_view_html',
+        sanitize=False,
+        readonly=True
+    )
     server_received_at = fields.Datetime(
         string='وقت وصول الطلب للسيرفر',
         default=fields.Datetime.now,
@@ -909,6 +915,20 @@ class StoreDriverRequestLine(models.Model):
                 'default_line_id': self.id,
             },
         }
+
+    @api.depends('trip_sheet_image')
+    def _compute_trip_sheet_view_html(self):
+        for rec in self:
+            if rec.trip_sheet_image and rec.id:
+                url = '/web/content?model=%s&amp;id=%s&amp;field=trip_sheet_image&amp;filename_field=trip_sheet_image_name&amp;download=false' % (
+                    rec._name, rec.id
+                )
+                rec.trip_sheet_view_html = (
+                    '<a href="%s" target="_blank" class="btn btn-sm btn-primary" '
+                    'style="padding:2px 10px; min-width:54px;">عرض</a>' % url
+                )
+            else:
+                rec.trip_sheet_view_html = '<span class="text-muted">—</span>'
 
     def action_view_trip_sheet_image(self):
         """Open the stored trip-sheet image inline without exposing its filename."""

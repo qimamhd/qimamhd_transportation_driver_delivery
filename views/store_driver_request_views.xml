@@ -169,11 +169,7 @@
                                                 attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','pending')]}"/>
                                         <field name="trip_sheet_image_name" invisible="1"/>
                                         <field name="trip_sheet_image" invisible="1"/>
-                                        <button name="action_view_trip_sheet_image"
-                                                string="عرض الصورة"
-                                                type="object"
-                                                icon="fa-image"
-                                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
+                                        <field name="trip_sheet_view_html" string="شيت الرحلة" widget="html" readonly="1"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"
