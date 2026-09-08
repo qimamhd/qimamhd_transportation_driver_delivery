@@ -6,6 +6,7 @@ from .common import company_domain
 
 
 DIRECT_DELIVERY_RADIUS_METERS = 50.0
+DIRECT_DELIVERY_MAX_GPS_ACCURACY_METERS = 5.0
 
 
 def _haversine_meters(lat1, lon1, lat2, lon2):
@@ -120,6 +121,16 @@ def match_direct_destination(env, driver, latitude, longitude, gps_accuracy=0.0)
         return None, failure
 
     accuracy = max(0.0, float(gps_accuracy or 0.0))
+    if accuracy <= 0.0 or accuracy > DIRECT_DELIVERY_MAX_GPS_ACCURACY_METERS:
+        return None, _failure(
+            'DIRECT_GPS_ACCURACY_TOO_LOW',
+            'دقة GPS غير كافية للتوصيل المباشر. يجب أن تكون 5 متر أو أقل.',
+            status=409,
+            details={
+                'gps_accuracy': accuracy,
+                'max_gps_accuracy': DIRECT_DELIVERY_MAX_GPS_ACCURACY_METERS,
+            },
+        )
     candidates = []
     seen_destination_ids = set()
 
