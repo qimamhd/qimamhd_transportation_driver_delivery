@@ -920,27 +920,28 @@ class StoreDriverRequestLine(models.Model):
     def _compute_trip_sheet_view_html(self):
         for rec in self:
             if rec.trip_sheet_image and rec.id:
-                url = '/web/content?model=%s&amp;id=%s&amp;field=trip_sheet_image&amp;filename_field=trip_sheet_image_name&amp;download=false' % (
+                url = '/web/content?model=%s&amp;id=%s&amp;field=trip_sheet_image&amp;filename_field=trip_sheet_image_name&amp;download=true' % (
                     rec._name, rec.id
                 )
                 rec.trip_sheet_view_html = (
-                    '<a href="%s" target="_blank" class="btn btn-sm btn-primary" '
-                    'style="padding:2px 10px; min-width:54px;">عرض</a>' % url
+                    '<a href="%s" class="btn btn-sm btn-primary" '
+                    'onclick="event.stopPropagation();" '
+                    'style="padding:2px 10px; min-width:54px;">تنزيل</a>' % url
                 )
             else:
                 rec.trip_sheet_view_html = '<span class="text-muted">—</span>'
 
     def action_view_trip_sheet_image(self):
-        """Open the stored trip-sheet image inline without exposing its filename."""
+        """Download the stored trip-sheet image without opening the delivery-line popup."""
         self.ensure_one()
         if not self.trip_sheet_image:
             return False
         return {
             'type': 'ir.actions.act_url',
-            'url': '/web/content?model=%s&id=%s&field=trip_sheet_image&filename_field=trip_sheet_image_name&download=false' % (
+            'url': '/web/content?model=%s&id=%s&field=trip_sheet_image&filename_field=trip_sheet_image_name&download=true' % (
                 self._name, self.id,
             ),
-            'target': 'new',
+            'target': 'self',
         }
 
     def action_accept_line(self):
