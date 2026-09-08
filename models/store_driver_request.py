@@ -728,6 +728,17 @@ class StoreDriverRequestLine(models.Model):
         required=True,
         help='الوقت بصيغة HH:MM:SS'
     )
+    trip_sheet_image = fields.Binary(
+        string='صورة شيت الرحلة',
+        attachment=True,
+        copy=False,
+        readonly=True
+    )
+    trip_sheet_image_name = fields.Char(
+        string='اسم صورة شيت الرحلة',
+        copy=False,
+        readonly=True
+    )
     server_received_at = fields.Datetime(
         string='وقت وصول الطلب للسيرفر',
         default=fields.Datetime.now,

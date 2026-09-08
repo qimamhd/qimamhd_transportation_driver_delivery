@@ -2,6 +2,8 @@
 
 import re
 import math
+import base64
+import binascii
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import ValidationError
@@ -41,6 +43,7 @@ class DriverAppDeliveryAPI(http.Controller):
         return {
             'id': line.id,
             'mobile_uuid': line.mobile_uuid or '',
+            'has_trip_sheet_image': bool(line.trip_sheet_image),
             'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
             'request_time': line.request_time or '',
             'car': cls._many2one_value(line.product_car_id),
@@ -351,7 +354,7 @@ class DriverAppDeliveryAPI(http.Controller):
         company._driver_app_auto_close_previous()
         policy = self._company_policy(company)
 
-        if request_payload_too_large(32 * 1024):
+        if request_payload_too_large(4 * 1024 * 1024):
             return error(
                 'PAYLOAD_TOO_LARGE',
                 'حجم الطلب أكبر من المسموح.',
@@ -422,6 +425,28 @@ class DriverAppDeliveryAPI(http.Controller):
             return error('INVALID_GPS', 'إحداثيات السائق خارج النطاق الصحيح.')
         if gps_accuracy < 0 or gps_accuracy > 10000:
             return error('INVALID_GPS_ACCURACY', 'دقة GPS المرسلة غير صالحة.')
+
+        trip_sheet_image = str(data.get('trip_sheet_image') or '').strip()
+        trip_sheet_image_name = str(data.get('trip_sheet_image_name') or 'trip_sheet.jpg').strip()[:128]
+        if trip_sheet_image:
+            try:
+                trip_sheet_bytes = base64.b64decode(trip_sheet_image, validate=True)
+            except (TypeError, ValueError, binascii.Error):
+                return error('INVALID_TRIP_SHEET_IMAGE', 'صورة شيت الرحلة غير صالحة.')
+            if len(trip_sheet_bytes) > 1200 * 1024:
+                return error('TRIP_SHEET_IMAGE_TOO_LARGE', 'حجم صورة شيت الرحلة أكبر من المسموح.', status=413)
+            is_jpeg = trip_sheet_bytes.startswith(b'\xff\xd8\xff')
+            is_png = trip_sheet_bytes.startswith(b'\x89PNG\r\n\x1a\n')
+            if not (is_jpeg or is_png):
+                return error('INVALID_TRIP_SHEET_IMAGE', 'صيغة صورة شيت الرحلة يجب أن تكون JPG أو PNG.')
+            trip_sheet_image_name = 'trip_sheet.png' if is_png else 'trip_sheet.jpg'
+
+        if policy.get('trip_sheet_required') and not trip_sheet_image:
+            return error(
+                'TRIP_SHEET_IMAGE_REQUIRED',
+                'صورة شيت الرحلة إلزامية حسب إعدادات الشركة ولا يمكن تسجيل التوصيلة بدونها.',
+                status=422,
+            )
 
         submission_context = str(data.get('submission_context') or '').strip()
         if submission_context == 'direct_delivery':
@@ -555,6 +580,8 @@ class DriverAppDeliveryAPI(http.Controller):
             'driver_latitude': latitude,
             'driver_longitude': longitude,
             'notes': str(data.get('notes') or '').strip()[:255],
+            'trip_sheet_image': trip_sheet_image or False,
+            'trip_sheet_image_name': trip_sheet_image_name if trip_sheet_image else False,
             'server_received_at': fields.Datetime.now(),
         }
         try:

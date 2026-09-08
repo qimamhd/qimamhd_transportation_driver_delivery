@@ -45,6 +45,12 @@ class ResCompany(models.Model):
         help='يغلق ملفات السائقين وفترات التوصيل المفتوحة عند انتقال الشهر. ما تعيد الإدارة فتحه يدويًا يبقى مفتوحًا.'
     )
 
+    driver_app_trip_sheet_required = fields.Boolean(
+        string='إلزام إرفاق صورة شيت الرحلة',
+        default=False,
+        help='عند التفعيل لا يسمح التطبيق ولا API بتسجيل التوصيلة النهائية بدون صورة شيت الرحلة. عند التعطيل يكون الإرفاق اختياريًا.'
+    )
+
     def _driver_app_timezone(self):
         self.ensure_one()
         return self.driver_app_timezone or 'Asia/Riyadh'
@@ -70,6 +76,7 @@ class ResCompany(models.Model):
             'allow_offline': bool(self.driver_app_allow_offline),
             'datetime_mode': self.driver_app_datetime_policy or 'server_now',
             'auto_close_previous_periods': bool(self.driver_app_auto_close_previous_months),
+            'trip_sheet_required': bool(self.driver_app_trip_sheet_required),
             'server_datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
             'server_date': now.strftime('%Y-%m-%d'),
             'server_time': now.strftime('%H:%M:%S'),

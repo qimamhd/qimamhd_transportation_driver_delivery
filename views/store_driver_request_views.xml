@@ -167,6 +167,8 @@
                                                 type="object"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
                                                 attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','pending')]}"/>
+                                        <field name="trip_sheet_image_name" invisible="1"/>
+                                        <field name="trip_sheet_image" string="شيت الرحلة" filename="trip_sheet_image_name" readonly="1" optional="show"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"
