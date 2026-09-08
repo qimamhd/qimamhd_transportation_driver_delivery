@@ -168,7 +168,12 @@
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
                                                 attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','pending')]}"/>
                                         <field name="trip_sheet_image_name" invisible="1"/>
-                                        <field name="trip_sheet_image" string="شيت الرحلة" filename="trip_sheet_image_name" readonly="1" optional="show"/>
+                                        <field name="trip_sheet_image" invisible="1"/>
+                                        <button name="action_view_trip_sheet_image"
+                                                string="عرض الصورة"
+                                                type="object"
+                                                icon="fa-image"
+                                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"

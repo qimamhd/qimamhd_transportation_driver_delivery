@@ -910,6 +910,19 @@ class StoreDriverRequestLine(models.Model):
             },
         }
 
+    def action_view_trip_sheet_image(self):
+        """Open the stored trip-sheet image inline without exposing its filename."""
+        self.ensure_one()
+        if not self.trip_sheet_image:
+            return False
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/web/content?model=%s&id=%s&field=trip_sheet_image&filename_field=trip_sheet_image_name&download=false' % (
+                self._name, self.id,
+            ),
+            'target': 'new',
+        }
+
     def action_accept_line(self):
         self._check_reviewer_access()
         for rec in self:
