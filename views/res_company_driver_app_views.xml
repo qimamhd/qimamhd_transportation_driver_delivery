@@ -13,7 +13,7 @@
                             <field name="driver_app_gps_policy"/>
                             <field name="driver_app_max_gps_accuracy"/>
                             <field name="driver_app_default_destination_radius"/>
-                            <button name="action_driver_app_sync_destination_radius" type="object" string="تحديث الحد في جميع الوجهات" class="oe_highlight" confirm="سيتم تحديث مجال GPS في جميع سجلات الوجهات التابعة لهذه الشركة بالقيمة المحددة. هل تريد المتابعة؟"/>
+                            <button name="action_driver_app_sync_destination_radius" type="object" string="تحديث الحد في جميع الوجهات" class="oe_highlight" confirm="سيتم تحديث مجال GPS في جميع سجلات الوجهات بالقيمة المحددة، بدون الاعتماد على حقل شركة في سجلات الوجهات. هل تريد المتابعة؟"/>
                             <field name="driver_app_datetime_policy"/>
                             <field name="driver_app_allow_offline"/>
                             <field name="driver_app_trip_sheet_required"/>

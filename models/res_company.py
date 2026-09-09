@@ -71,11 +71,13 @@ class ResCompany(models.Model):
                 raise ValidationError('الحد الافتراضي للوصول للوجهة يجب أن يكون أكبر من صفر متر.')
 
     def action_driver_app_sync_destination_radius(self):
-        """Apply this company's configured default to its pricing destination lines only.
+        """Apply the configured value to every destination pricing line.
 
-        Runtime remains destination-line authoritative.  The company field is only
-        an explicit bulk-management tool; changing it alone never silently rewrites
-        operational destination records.
+        Pricing/destination records in the base transportation module are global and
+        are not required to carry company_id.  Therefore this bulk action deliberately
+        does not filter, validate, or otherwise depend on a company field on those
+        models.  Runtime remains destination-line authoritative; this company setting
+        is only the administrator's input for the explicit bulk update button.
         """
         self.ensure_one()
         if not self.env.user.has_group('base.group_system'):
@@ -84,18 +86,8 @@ class ResCompany(models.Model):
         if radius <= 0:
             raise ValidationError('الحد الافتراضي للوصول للوجهة يجب أن يكون أكبر من صفر متر.')
 
-        Pricing = self.env['trnsp.store.pricing'].sudo()
-        if 'company_id' not in Pricing._fields:
-            raise ValidationError(
-                'تعذر تحديث مجالات الوجهات بأمان لأن تعريف التسعيرات لا يحتوي على حقل الشركة.'
-            )
-        headers = Pricing.search([('company_id', '=', self.id)])
-        global_headers = Pricing.search([('company_id', '=', False)], limit=1)
-        if global_headers:
-            raise ValidationError(
-                'يوجد سجل تسعير واحد على الأقل بدون شركة. لم يتم تنفيذ التحديث حتى لا تتأثر شركات أخرى. اربط سجلات التسعير بالشركة أولًا ثم أعد المحاولة.'
-            )
-        lines = headers.mapped('pricing_lines').filtered(lambda line: bool(line.destination_path_id))
+        PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
+        lines = PricingLine.search([('destination_path_id', '!=', False)])
         if lines:
             lines.write({'gps_radius': radius})
         return {
