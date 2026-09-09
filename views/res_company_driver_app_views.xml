@@ -11,6 +11,9 @@
                         <group string="سياسات التوصيلة">
                             <field name="driver_app_timezone"/>
                             <field name="driver_app_gps_policy"/>
+                            <field name="driver_app_max_gps_accuracy"/>
+                            <field name="driver_app_default_destination_radius"/>
+                            <button name="action_driver_app_sync_destination_radius" type="object" string="تحديث الحد في جميع الوجهات" class="oe_highlight" confirm="سيتم تحديث مجال GPS في جميع سجلات الوجهات التابعة لهذه الشركة بالقيمة المحددة. هل تريد المتابعة؟"/>
                             <field name="driver_app_datetime_policy"/>
                             <field name="driver_app_allow_offline"/>
                             <field name="driver_app_trip_sheet_required"/>
@@ -23,7 +26,7 @@
                     <separator string="الإعداد الافتراضي الموصى به"/>
                     <div class="alert alert-info" role="alert">
                         <strong>الافتراضي:</strong>
-                        داخل نطاق GPS فقط، الشهر الحالي فقط، اتصال إنترنت إلزامي، تاريخ ووقت السيرفر، وإغلاق الأشهر السابقة تلقائيًا. صورة شيت الرحلة اختيارية افتراضيًا ويمكن إلزامها من نفس الإعدادات.
+                        داخل نطاق GPS فقط، دقة GPS قصوى 20 متر، وحد افتراضي للوجهات 50 متر يمكن تطبيقه جماعيًا على سجلات الوجهات، الشهر الحالي فقط، اتصال إنترنت إلزامي، تاريخ ووقت السيرفر، وإغلاق الأشهر السابقة تلقائيًا. صورة شيت الرحلة اختيارية افتراضيًا ويمكن إلزامها من نفس الإعدادات.
                         يمكن تغيير كل سياسة بشكل مستقل عند حاجة الشركة، مع بقاء الحماية النهائية في API السيرفر.
                     </div>
                 </page>

@@ -5,6 +5,7 @@ from datetime import datetime
 import pytz
 
 from odoo import api, fields, models
+from odoo.exceptions import AccessError, ValidationError
 
 
 class ResCompany(models.Model):
@@ -51,6 +52,69 @@ class ResCompany(models.Model):
         help='عند التفعيل لا يسمح التطبيق ولا API بتسجيل التوصيلة النهائية بدون صورة شيت الرحلة. عند التعطيل يكون الإرفاق اختياريًا.'
     )
 
+    driver_app_default_destination_radius = fields.Float(
+        string='الحد الافتراضي المسموح للوصول للوجهة (متر)',
+        default=50.0,
+        help='قيمة إدارية لتوحيد مجال GPS في سجلات الوجهات. التطبيق وAPI لا يعتمدان على هذا الحقل مباشرة؛ المصدر النهائي وقت التشغيل هو مجال GPS المحفوظ في سجل الوجهة نفسه.'
+    )
+
+    driver_app_max_gps_accuracy = fields.Float(
+        string='أقصى دقة GPS مسموحة (متر)',
+        default=20.0,
+        help='أقصى قيمة Accuracy يقبلها التطبيق وAPI في نقاط التحقق الحرجة. كلما قل الرقم كانت الدقة المطلوبة أعلى. يبقى فحص نطاق الوجهة مستقلاً ويستخدم المسافة + دقة GPS.'
+    )
+
+    @api.constrains('driver_app_default_destination_radius')
+    def _check_driver_app_default_destination_radius(self):
+        for company in self:
+            if company.driver_app_default_destination_radius <= 0:
+                raise ValidationError('الحد الافتراضي للوصول للوجهة يجب أن يكون أكبر من صفر متر.')
+
+    def action_driver_app_sync_destination_radius(self):
+        """Apply this company's configured default to its pricing destination lines only.
+
+        Runtime remains destination-line authoritative.  The company field is only
+        an explicit bulk-management tool; changing it alone never silently rewrites
+        operational destination records.
+        """
+        self.ensure_one()
+        if not self.env.user.has_group('base.group_system'):
+            raise AccessError('هذه العملية متاحة لمسؤولي الإعدادات فقط.')
+        radius = float(self.driver_app_default_destination_radius or 0.0)
+        if radius <= 0:
+            raise ValidationError('الحد الافتراضي للوصول للوجهة يجب أن يكون أكبر من صفر متر.')
+
+        Pricing = self.env['trnsp.store.pricing'].sudo()
+        if 'company_id' not in Pricing._fields:
+            raise ValidationError(
+                'تعذر تحديث مجالات الوجهات بأمان لأن تعريف التسعيرات لا يحتوي على حقل الشركة.'
+            )
+        headers = Pricing.search([('company_id', '=', self.id)])
+        global_headers = Pricing.search([('company_id', '=', False)], limit=1)
+        if global_headers:
+            raise ValidationError(
+                'يوجد سجل تسعير واحد على الأقل بدون شركة. لم يتم تنفيذ التحديث حتى لا تتأثر شركات أخرى. اربط سجلات التسعير بالشركة أولًا ثم أعد المحاولة.'
+            )
+        lines = headers.mapped('pricing_lines').filtered(lambda line: bool(line.destination_path_id))
+        if lines:
+            lines.write({'gps_radius': radius})
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'تم تحديث مجال الوجهات',
+                'message': 'تم تحديث %s سجل وجهة إلى %.0f متر.' % (len(lines), radius),
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    @api.constrains('driver_app_max_gps_accuracy')
+    def _check_driver_app_max_gps_accuracy(self):
+        for company in self:
+            if company.driver_app_max_gps_accuracy <= 0:
+                raise ValidationError('أقصى دقة GPS يجب أن تكون أكبر من صفر متر.')
+
     def _driver_app_timezone(self):
         self.ensure_one()
         return self.driver_app_timezone or 'Asia/Riyadh'
@@ -77,6 +141,7 @@ class ResCompany(models.Model):
             'datetime_mode': self.driver_app_datetime_policy or 'server_now',
             'auto_close_previous_periods': bool(self.driver_app_auto_close_previous_months),
             'trip_sheet_required': bool(self.driver_app_trip_sheet_required),
+            'max_gps_accuracy_meters': max(1.0, float(self.driver_app_max_gps_accuracy or 20.0)),
             'server_datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
             'server_date': now.strftime('%Y-%m-%d'),
             'server_time': now.strftime('%H:%M:%S'),
