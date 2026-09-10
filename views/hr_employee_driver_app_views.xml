@@ -62,7 +62,6 @@
                                         string="إلغاء ارتباط الجهاز المعتمد"
                                         type="object"
                                         class="oe_highlight"
-                                        attrs="{'invisible':[('app_device_id','=',False)]}"
                                         confirm="سيتم إلغاء ارتباط الجهاز وإبطال جميع جلسات التطبيق واعتمادات البصمة لهذا السائق. لن يتم حذف أي رحلة أو توصيلة. هل تريد الاستمرار؟"/>
 
                                 <button name="action_clear_app_credentials"
