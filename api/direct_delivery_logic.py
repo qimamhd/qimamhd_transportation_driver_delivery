@@ -5,6 +5,8 @@ import math
 from .common import company_domain
 
 
+DIRECT_DELIVERY_RADIUS_METERS = 50.0
+
 
 def get_max_gps_accuracy(driver):
     """Company-controlled critical GPS accuracy; 20 m default, never non-positive."""
@@ -161,7 +163,6 @@ def match_direct_destination(env, driver, latitude, longitude, gps_accuracy=0.0)
         # Keep the same conservative GPS hardening used by the existing app:
         # a point counts as inside only when the uncertainty radius also fits.
         effective_distance = distance + accuracy
-        allowed_radius = max(0.0, float(line.gps_radius or 0.0))
         candidates.append({
             'destination': destination,
             'pricing_line': line,
@@ -169,7 +170,6 @@ def match_direct_destination(env, driver, latitude, longitude, gps_accuracy=0.0)
             'longitude': dest_lon,
             'distance': distance,
             'effective_distance': effective_distance,
-            'allowed_radius': allowed_radius,
         })
 
     if not candidates:
@@ -180,20 +180,15 @@ def match_direct_destination(env, driver, latitude, longitude, gps_accuracy=0.0)
             details={
                 'source_id': context['area'].id,
                 'source_name': context['area'].display_name,
-                'allowed_radius': 0.0,
+                'allowed_radius': DIRECT_DELIVERY_RADIUS_METERS,
             },
         )
 
-    valid_candidates = [
-        item for item in candidates
-        if item['allowed_radius'] > 0.0
-        and item['effective_distance'] <= item['allowed_radius']
-    ]
-    if not valid_candidates:
-        nearest = min(candidates, key=lambda item: (item['effective_distance'], item['distance']))
+    nearest = min(candidates, key=lambda item: (item['effective_distance'], item['distance']))
+    if nearest['effective_distance'] > DIRECT_DELIVERY_RADIUS_METERS:
         return None, _failure(
             'DIRECT_DESTINATION_NOT_MATCHED',
-            'موقعك الحالي لا يطابق أي وجهة معتمدة لهذا المصدر ضمن المجال المحدد في أودو.',
+            'موقعك الحالي لا يطابق أي وجهة معتمدة لهذا المصدر ضمن 50 متر.',
             status=409,
             details={
                 'source_id': context['area'].id,
@@ -203,11 +198,10 @@ def match_direct_destination(env, driver, latitude, longitude, gps_accuracy=0.0)
                 'nearest_distance': nearest['distance'],
                 'gps_accuracy': accuracy,
                 'effective_distance': nearest['effective_distance'],
-                'allowed_radius': nearest['allowed_radius'],
+                'allowed_radius': DIRECT_DELIVERY_RADIUS_METERS,
             },
         )
 
-    nearest = min(valid_candidates, key=lambda item: (item['effective_distance'], item['distance']))
     nearest['context'] = context
     nearest['gps_accuracy'] = accuracy
     return nearest, None
@@ -259,7 +253,7 @@ def validate_direct_delivery_submission(
                 'gps_distance': match['distance'],
                 'gps_accuracy': match['gps_accuracy'],
                 'effective_distance': match['effective_distance'],
-                'allowed_radius': match['allowed_radius'],
+                'allowed_radius': DIRECT_DELIVERY_RADIUS_METERS,
             },
         )
 

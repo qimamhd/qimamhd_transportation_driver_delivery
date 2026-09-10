@@ -21,8 +21,8 @@ class TrnspStorePricingLines(models.Model):
 
     gps_radius = fields.Float(
         string='مجال GPS المسموح (متر)',
-        default=50.0,
-        help='أقصى مسافة مسموحة بين موقع السائق وموقع الوجهة عند تسجيل التوصيلة. هذه القيمة هي المرجع النهائي للمباشر والرحلة الكاملة ولا تعتمد على حقل شركة.'
+        default=200.0,
+        help='أقصى مسافة مسموحة بين موقع السائق وموقع الوجهة عند تسجيل التوصيلة.'
     )
 
     @api.constrains('gps_radius')

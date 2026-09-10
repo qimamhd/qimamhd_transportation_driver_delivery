@@ -5,7 +5,7 @@ from datetime import datetime
 import pytz
 
 from odoo import api, fields, models
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import ValidationError
 
 
 class ResCompany(models.Model):
@@ -52,10 +52,10 @@ class ResCompany(models.Model):
         help='عند التفعيل لا يسمح التطبيق ولا API بتسجيل التوصيلة النهائية بدون صورة شيت الرحلة. عند التعطيل يكون الإرفاق اختياريًا.'
     )
 
-    driver_app_default_destination_radius = fields.Float(
-        string='الحد الافتراضي المسموح للوصول للوجهة (متر)',
-        default=50.0,
-        help='قيمة إدارية لتوحيد مجال GPS في سجلات الوجهات. التطبيق وAPI لا يعتمدان على هذا الحقل مباشرة؛ المصدر النهائي وقت التشغيل هو مجال GPS المحفوظ في سجل الوجهة نفسه.'
+    driver_app_single_device = fields.Boolean(
+        string='تقييد السائق بجهاز واحد',
+        default=False,
+        help='عند التفعيل يرتبط حساب السائق بأول جهاز يسجل الدخول بنجاح، ويُرفض تسجيل الدخول من أي جهاز آخر حتى يفك المسؤول ارتباط الجهاز. الإعداد معطل افتراضيًا للحفاظ على توافق النسخ الحالية أثناء الترقية، ويمكن تفعيله بعد تحديث التطبيق.'
     )
 
     driver_app_max_gps_accuracy = fields.Float(
@@ -63,43 +63,6 @@ class ResCompany(models.Model):
         default=20.0,
         help='أقصى قيمة Accuracy يقبلها التطبيق وAPI في نقاط التحقق الحرجة. كلما قل الرقم كانت الدقة المطلوبة أعلى. يبقى فحص نطاق الوجهة مستقلاً ويستخدم المسافة + دقة GPS.'
     )
-
-    @api.constrains('driver_app_default_destination_radius')
-    def _check_driver_app_default_destination_radius(self):
-        for company in self:
-            if company.driver_app_default_destination_radius <= 0:
-                raise ValidationError('الحد الافتراضي للوصول للوجهة يجب أن يكون أكبر من صفر متر.')
-
-    def action_driver_app_sync_destination_radius(self):
-        """Apply the configured value to every destination pricing line.
-
-        Pricing/destination records in the base transportation module are global and
-        are not required to carry company_id.  Therefore this bulk action deliberately
-        does not filter, validate, or otherwise depend on a company field on those
-        models.  Runtime remains destination-line authoritative; this company setting
-        is only the administrator's input for the explicit bulk update button.
-        """
-        self.ensure_one()
-        if not self.env.user.has_group('base.group_system'):
-            raise AccessError('هذه العملية متاحة لمسؤولي الإعدادات فقط.')
-        radius = float(self.driver_app_default_destination_radius or 0.0)
-        if radius <= 0:
-            raise ValidationError('الحد الافتراضي للوصول للوجهة يجب أن يكون أكبر من صفر متر.')
-
-        PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
-        lines = PricingLine.search([('destination_path_id', '!=', False)])
-        if lines:
-            lines.write({'gps_radius': radius})
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'تم تحديث مجال الوجهات',
-                'message': 'تم تحديث %s سجل وجهة إلى %.0f متر.' % (len(lines), radius),
-                'type': 'success',
-                'sticky': False,
-            },
-        }
 
     @api.constrains('driver_app_max_gps_accuracy')
     def _check_driver_app_max_gps_accuracy(self):
@@ -133,6 +96,7 @@ class ResCompany(models.Model):
             'datetime_mode': self.driver_app_datetime_policy or 'server_now',
             'auto_close_previous_periods': bool(self.driver_app_auto_close_previous_months),
             'trip_sheet_required': bool(self.driver_app_trip_sheet_required),
+            'single_device_enabled': bool(self.driver_app_single_device),
             'max_gps_accuracy_meters': max(1.0, float(self.driver_app_max_gps_accuracy or 20.0)),
             'server_datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
             'server_date': now.strftime('%Y-%m-%d'),

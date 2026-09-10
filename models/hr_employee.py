@@ -88,6 +88,35 @@ class HrEmployeeDriverApp(models.Model):
         copy=False
     )
 
+    app_device_id = fields.Char(
+        string='معرف الجهاز المعتمد',
+        readonly=True,
+        copy=False,
+        index=True,
+        groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
+    )
+
+    app_device_name = fields.Char(
+        string='الجهاز المعتمد',
+        readonly=True,
+        copy=False,
+        groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
+    )
+
+    app_device_bound_at = fields.Datetime(
+        string='تاريخ اعتماد الجهاز',
+        readonly=True,
+        copy=False,
+        groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
+    )
+
+    app_device_last_login_at = fields.Datetime(
+        string='آخر دخول من الجهاز المعتمد',
+        readonly=True,
+        copy=False,
+        groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
+    )
+
     app_failed_attempts = fields.Integer(
         string='محاولات الدخول الفاشلة',
         default=0,
@@ -252,6 +281,74 @@ class HrEmployeeDriverApp(models.Model):
                 raise ValidationError(
                     _('يجب تعيين كلمة مرور للتطبيق قبل تفعيل دخول السائق.')
                 )
+
+    def _single_device_policy_enabled(self):
+        self.ensure_one()
+        return bool(self.company_id and self.company_id.driver_app_single_device)
+
+    def check_or_bind_app_device(self, device_id, device_name=False):
+        """Atomically validate/bind this driver's approved device.
+
+        Called only after password verification. The row lock prevents two
+        simultaneous first-login requests from binding two different devices.
+        Returns (allowed, newly_bound).
+        """
+        self.ensure_one()
+        if not self._single_device_policy_enabled():
+            return True, False
+
+        device_id = str(device_id or '').strip()
+        if not device_id or len(device_id) > 128:
+            return False, False
+
+        self.env.cr.execute(
+            'SELECT id FROM hr_employee WHERE id = %s FOR UPDATE',
+            (self.id,),
+        )
+        self.invalidate_cache([
+            'app_device_id', 'app_device_name', 'app_device_bound_at',
+            'app_device_last_login_at',
+        ])
+        current = (self.app_device_id or '').strip()
+        now = fields.Datetime.now()
+        if current and current != device_id:
+            return False, False
+
+        vals = {'app_device_last_login_at': now}
+        newly_bound = not bool(current)
+        if newly_bound:
+            vals.update({
+                'app_device_id': device_id,
+                'app_device_name': (str(device_name or '').strip()[:128] or 'Qimam Route Mobile'),
+                'app_device_bound_at': now,
+            })
+        elif device_name and self.app_device_name != str(device_name).strip()[:128]:
+            vals['app_device_name'] = str(device_name).strip()[:128]
+        super(HrEmployeeDriverApp, self).write(vals)
+        return True, newly_bound
+
+    def action_unbind_app_device(self):
+        """Manager-only device reset; revoke all active app access tokens."""
+        self._check_driver_app_manager()
+        sessions = self.env['trnsp.driver.app.session'].sudo().search([
+            ('employee_id', 'in', self.ids),
+            ('revoked', '=', False),
+        ])
+        if sessions:
+            sessions.write({'revoked': True})
+        credentials = self.env['trnsp.driver.biometric.credential'].sudo().search([
+            ('employee_id', 'in', self.ids),
+            ('revoked', '=', False),
+        ])
+        if credentials:
+            credentials.write({'revoked': True})
+        super(HrEmployeeDriverApp, self).write({
+            'app_device_id': False,
+            'app_device_name': False,
+            'app_device_bound_at': False,
+            'app_device_last_login_at': False,
+        })
+        return True
 
     def verify_app_pin(self, pin):
         self.ensure_one()

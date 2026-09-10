@@ -33,6 +33,7 @@ class DriverAppAuthAPI(http.Controller):
         identification_id = str(data.get('identification_id') or '').strip()
         password = data.get('password')
         device_name = str(data.get('device_name') or '').strip()[:128]
+        device_id = str(data.get('device_id') or '').strip()
 
         if not identification_id:
             return error('IDENTIFICATION_REQUIRED', 'رقم الهوية مطلوب.')
@@ -96,6 +97,23 @@ class DriverAppAuthAPI(http.Controller):
                 status=401,
             )
 
+        if driver.company_id and driver.company_id.driver_app_single_device:
+            if not device_id or len(device_id) > 128:
+                return error(
+                    'DEVICE_ID_REQUIRED',
+                    'تعذر التحقق من هوية هذا الجهاز. حدّث التطبيق ثم حاول مرة أخرى.',
+                    status=400,
+                )
+            allowed, _newly_bound = driver.sudo().check_or_bind_app_device(
+                device_id, device_name=device_name
+            )
+            if not allowed:
+                return error(
+                    'DEVICE_NOT_AUTHORIZED',
+                    'هذا الحساب مرتبط بجهاز آخر. يرجى التواصل مع المسؤول لتغيير الجهاز المعتمد.',
+                    status=403,
+                )
+
         driver.sudo().write({
             'app_failed_attempts': 0,
             'app_locked_until': False,
@@ -106,6 +124,7 @@ class DriverAppAuthAPI(http.Controller):
             token, session = request.env['trnsp.driver.app.session'].sudo().create_session(
                 driver,
                 device_name=device_name,
+                device_id=device_id or False,
             )
         except Exception:
             request.env.cr.rollback()
@@ -126,6 +145,8 @@ class DriverAppAuthAPI(http.Controller):
                 'company_id': driver.company_id.id if driver.company_id else False,
                 'company_name': driver.company_id.name if driver.company_id else False,
                 'biometric_allowed': bool(driver.biometric_allowed),
+                'single_device_enabled': bool(driver.company_id and driver.company_id.driver_app_single_device),
+                'device_authorized': bool(not (driver.company_id and driver.company_id.driver_app_single_device) or driver.app_device_id == device_id),
             },
         })
 
@@ -181,6 +202,13 @@ class DriverAppAuthAPI(http.Controller):
         device_name = str(data.get('device_name') or '').strip()[:128]
         if not device_id or len(device_id) > 128:
             return error('DEVICE_ID_REQUIRED', 'معرف الجهاز غير صالح.', status=400)
+        if driver.company_id and driver.company_id.driver_app_single_device:
+            if not driver.app_device_id or driver.app_device_id != device_id:
+                return error(
+                    'DEVICE_NOT_AUTHORIZED',
+                    'لا يمكن تفعيل البصمة إلا على الجهاز المعتمد لهذا السائق.',
+                    status=403,
+                )
 
         try:
             token, credential = request.env[
@@ -256,10 +284,27 @@ class DriverAppAuthAPI(http.Controller):
                 status=403,
             )
 
+        if driver.company_id and driver.company_id.driver_app_single_device:
+            if not driver.app_device_id:
+                return error(
+                    'DEVICE_REBIND_REQUIRED',
+                    'يلزم تسجيل الدخول بكلمة المرور لاعتماد هذا الجهاز.',
+                    status=401,
+                )
+            if driver.app_device_id != device_id:
+                credential.sudo().write({'revoked': True})
+                return error(
+                    'DEVICE_NOT_AUTHORIZED',
+                    'هذا الحساب مرتبط بجهاز آخر. يرجى التواصل مع المسؤول لتغيير الجهاز المعتمد.',
+                    status=403,
+                )
+
         try:
             token, session = request.env[
                 'trnsp.driver.app.session'
-            ].sudo().create_session(driver, device_name=device_name)
+            ].sudo().create_session(
+                driver, device_name=device_name, device_id=device_id
+            )
         except Exception:
             request.env.cr.rollback()
             return error(

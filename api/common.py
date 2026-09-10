@@ -127,6 +127,28 @@ def authenticate_driver():
             status=403,
         )
 
+    # Device binding is a backend guard and is intentionally independent from
+    # GPS/delivery logic. Once enabled, legacy/unbound sessions are invalidated
+    # and the driver must perform one password login from the approved device.
+    company = driver.company_id.sudo() if driver.company_id else False
+    if company and company.driver_app_single_device:
+        bound_device_id = (driver.app_device_id or '').strip()
+        session_device_id = (session.device_id or '').strip()
+        if not bound_device_id:
+            session.sudo().write({'revoked': True})
+            return None, error(
+                'DEVICE_REBIND_REQUIRED',
+                'يلزم تسجيل الدخول بكلمة المرور لاعتماد هذا الجهاز.',
+                status=401,
+            )
+        if not session_device_id or session_device_id != bound_device_id:
+            session.sudo().write({'revoked': True})
+            return None, error(
+                'DEVICE_SESSION_MISMATCH',
+                'جلسة التطبيق لا تخص الجهاز المعتمد لهذا السائق. سجل الدخول من الجهاز المعتمد.',
+                status=403,
+            )
+
     session.sudo().write({'last_used_at': datetime.utcnow()})
     return (driver, session), None
 

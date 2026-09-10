@@ -27,6 +27,13 @@ class DriverAppSession(models.Model):
         readonly=True,
     )
     device_name = fields.Char(string='الجهاز', readonly=True)
+    device_id = fields.Char(
+        string='معرف الجهاز',
+        readonly=True,
+        copy=False,
+        index=True,
+        help='المعرف المحلي الآمن للجهاز الذي أنشأ هذه الجلسة.'
+    )
     created_at = fields.Datetime(
         string='تاريخ الإنشاء',
         default=fields.Datetime.now,
@@ -42,7 +49,7 @@ class DriverAppSession(models.Model):
     ]
 
     @api.model
-    def create_session(self, employee, device_name=False, days=None):
+    def create_session(self, employee, device_name=False, device_id=False, days=None):
         # Keep the existing 30-day behavior by default, while allowing a system
         # administrator to shorten it without changing mobile code.
         if days is None:
@@ -63,6 +70,7 @@ class DriverAppSession(models.Model):
             'employee_id': employee.id,
             'token_hash': digest,
             'device_name': device_name or False,
+            'device_id': device_id or False,
             'created_at': now,
             'last_used_at': now,
             'expires_at': now + timedelta(days=days),

@@ -39,6 +39,12 @@
                                     <field name="app_failed_attempts" readonly="1"/>
                                     <field name="app_locked_until" readonly="1"/>
                                 </group>
+                                <group string="أمان الجهاز">
+                                    <field name="app_device_name" readonly="1" placeholder="لا يوجد جهاز معتمد"/>
+                                    <field name="app_device_bound_at" readonly="1"/>
+                                    <field name="app_device_last_login_at" readonly="1"/>
+                                    <field name="app_device_id" readonly="1" password="True"/>
+                                </group>
                             </group>
 
                             <group>
@@ -48,6 +54,13 @@
                                         class="oe_highlight"
                                         attrs="{'invisible':['&amp;',('app_failed_attempts','=',0),('app_locked_until','=',False)]}"
                                         confirm="سيتم تصفير محاولات الدخول الفاشلة وإلغاء القفل الحالي فقط، دون تغيير كلمة المرور أو بيانات الدخول. هل تريد الاستمرار؟"/>
+
+                                <button name="action_unbind_app_device"
+                                        string="إلغاء ارتباط الجهاز المعتمد"
+                                        type="object"
+                                        class="oe_highlight"
+                                        attrs="{'invisible':[('app_device_id','=',False)]}"
+                                        confirm="سيتم إلغاء ارتباط الجهاز وإبطال جميع جلسات التطبيق واعتمادات البصمة لهذا السائق. لن يتم حذف أي رحلة أو توصيلة. هل تريد الاستمرار؟"/>
 
                                 <button name="action_clear_app_credentials"
                                         string="إلغاء دخول التطبيق ومسح بيانات الاعتماد"
