@@ -15,6 +15,9 @@
             <field name="arch" type="xml">
 
                 <xpath expr="//sheet" position="inside">
+                    <!-- Technical helper kept unconditionally in the inherited form so
+                         Odoo 13 can safely evaluate button attrs before group rendering. -->
+                    <field name="app_device_id" invisible="1"/>
                     <notebook>
                         <page string="تطبيق السائق"
                               groups="qimamhd_transportation_driver_delivery.group_driver_request_manager">
