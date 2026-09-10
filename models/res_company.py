@@ -52,6 +52,13 @@ class ResCompany(models.Model):
         help='عند التفعيل لا يسمح التطبيق ولا API بتسجيل التوصيلة النهائية بدون صورة شيت الرحلة. عند التعطيل يكون الإرفاق اختياريًا.'
     )
 
+
+    driver_app_enable_route_trip = fields.Boolean(
+        string='إظهار خيار بدء رحلة جديدة',
+        default=False,
+        help='عند التفعيل يظهر خيار بدء رحلة جديدة في تطبيق السائق ويُسمح بإكمال هذا المسار. عند التعطيل يبقى خيار التوصيلة المباشرة متاحًا، ولا يتأثر أي منطق GPS أو سياسات التوصيل الأخرى.'
+    )
+
     driver_app_single_device = fields.Boolean(
         string='تقييد السائق بجهاز واحد',
         default=False,
@@ -97,6 +104,7 @@ class ResCompany(models.Model):
             'auto_close_previous_periods': bool(self.driver_app_auto_close_previous_months),
             'trip_sheet_required': bool(self.driver_app_trip_sheet_required),
             'single_device_enabled': bool(self.driver_app_single_device),
+            'route_trip_enabled': bool(self.driver_app_enable_route_trip),
             'max_gps_accuracy_meters': max(1.0, float(self.driver_app_max_gps_accuracy or 20.0)),
             'server_datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
             'server_date': now.strftime('%Y-%m-%d'),
