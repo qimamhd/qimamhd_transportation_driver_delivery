@@ -32,13 +32,13 @@ class DriverAppDashboardAPI(http.Controller):
         }
 
     @classmethod
-    def _year_stats(cls, driver_id, year):
+    def _year_stats(cls, driver_id, company_id, year):
         Line = request.env['trnsp.store.driver.request.line'].sudo()
         months = cls._empty_months()
         totals = {'total': 0, 'accepted': 0, 'rejected': 0, 'pending': 0}
 
         groups = Line.read_group(
-            [('driver_id', '=', driver_id), ('year', '=', year)],
+            [('driver_id', '=', driver_id), ('company_id', '=', company_id), ('year', '=', year)],
             ['month_name', 'review_state'],
             ['month_name', 'review_state'],
             lazy=False,
@@ -81,7 +81,7 @@ class DriverAppDashboardAPI(http.Controller):
 
         Line = request.env['trnsp.store.driver.request.line'].sudo()
         year_groups = Line.read_group(
-            [('driver_id', '=', driver.id)],
+            [('driver_id', '=', driver.id), ('company_id', '=', driver.company_id.id)],
             ['year'],
             ['year'],
             lazy=False,
@@ -97,8 +97,8 @@ class DriverAppDashboardAPI(http.Controller):
         years.add(current_year)
         years.add(selected_year)
 
-        current = self._year_stats(driver.id, selected_year)
-        previous = self._year_stats(driver.id, selected_year - 1)
+        current = self._year_stats(driver.id, driver.company_id.id, selected_year)
+        previous = self._year_stats(driver.id, driver.company_id.id, selected_year - 1)
 
         return ok({
             'selected_year': selected_year,
