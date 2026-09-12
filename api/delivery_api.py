@@ -368,6 +368,20 @@ class DriverAppDeliveryAPI(http.Controller):
         if len(mobile_uuid) > 128:
             return error('INVALID_UUID', 'uuid غير صالح.')
 
+        # SECURITY: validate the client-declared flow before any idempotent
+        # early-return. A reused UUID must not turn an otherwise invalid
+        # submission_context into a successful duplicate response.
+        submission_context = str(data.get('submission_context') or '').strip()
+        if submission_context not in ('direct_delivery', 'route_trip'):
+            return error(
+                'INVALID_SUBMISSION_CONTEXT',
+                'نوع تسجيل التوصيلة غير صالح أو غير محدد.',
+                status=409,
+                details={
+                    'allowed_contexts': ['direct_delivery', 'route_trip'],
+                },
+            )
+
         # Idempotency: repeated mobile sends return the original row, not a duplicate.
         existing = request.env['trnsp.store.driver.request.line'].sudo().search([
             ('mobile_uuid', '=', mobile_uuid),
@@ -446,21 +460,6 @@ class DriverAppDeliveryAPI(http.Controller):
                 'TRIP_SHEET_IMAGE_REQUIRED',
                 'صورة شيت الرحلة إلزامية حسب إعدادات الشركة ولا يمكن تسجيل التوصيلة بدونها.',
                 status=422,
-            )
-
-        # SECURITY: submission_context is client input and must never be allowed
-        # to silently fall back to the weaker legacy/general GPS path.
-        # Only the two known flows are accepted. The route-trip flow is also
-        # gated by the authoritative company policy on the server.
-        submission_context = str(data.get('submission_context') or '').strip()
-        if submission_context not in ('direct_delivery', 'route_trip'):
-            return error(
-                'INVALID_SUBMISSION_CONTEXT',
-                'نوع تسجيل التوصيلة غير صالح أو غير محدد.',
-                status=409,
-                details={
-                    'allowed_contexts': ['direct_delivery', 'route_trip'],
-                },
             )
 
         if submission_context == 'route_trip' and not policy.get('route_trip_enabled'):
