@@ -448,7 +448,28 @@ class DriverAppDeliveryAPI(http.Controller):
                 status=422,
             )
 
+        # SECURITY: submission_context is client input and must never be allowed
+        # to silently fall back to the weaker legacy/general GPS path.
+        # Only the two known flows are accepted. The route-trip flow is also
+        # gated by the authoritative company policy on the server.
         submission_context = str(data.get('submission_context') or '').strip()
+        if submission_context not in ('direct_delivery', 'route_trip'):
+            return error(
+                'INVALID_SUBMISSION_CONTEXT',
+                'نوع تسجيل التوصيلة غير صالح أو غير محدد.',
+                status=409,
+                details={
+                    'allowed_contexts': ['direct_delivery', 'route_trip'],
+                },
+            )
+
+        if submission_context == 'route_trip' and not policy.get('route_trip_enabled'):
+            return error(
+                'ROUTE_TRIP_DISABLED',
+                'بدء/إنهاء الرحلات غير مسموح حسب إعدادات الشركة.',
+                status=403,
+            )
+
         if submission_context == 'direct_delivery':
             direct_match, direct_failure = validate_direct_delivery_submission(
                 request.env, driver, car_id, source_id, destination_id,
@@ -460,7 +481,7 @@ class DriverAppDeliveryAPI(http.Controller):
                     status=direct_failure['status'],
                     details=direct_failure.get('details')
                 )
-        elif submission_context == 'route_trip':
+        else:  # route_trip; validated above against company policy
             route_context, route_failure = validate_route_trip_submission(
                 request.env, driver, car_id, source_id, gps_accuracy=gps_accuracy
             )
