@@ -575,9 +575,9 @@ class DriverAppDeliveryAPI(http.Controller):
             )
 
         # Direct delivery has already been server-validated against the
-        # driver's assigned area, the auto-matched destination and its dedicated
-        # 50 m radius. Keep the legacy/company GPS policy untouched for every
-        # other delivery flow.
+        # driver's assigned area, the auto-matched destination and that
+        # destination's configured GPS radius. Keep the legacy/company GPS
+        # policy untouched for every other delivery flow.
         if submission_context != 'direct_delivery':
             gps_error = self._validate_gps_before_create(
                 company, pricing_line, latitude, longitude, gps_accuracy=gps_accuracy
@@ -608,10 +608,9 @@ class DriverAppDeliveryAPI(http.Controller):
             with request.env.cr.savepoint():
                 line = request.env['trnsp.store.driver.request.line'].sudo().create(line_vals)
                 if submission_context == 'direct_delivery':
-                    # Keep the saved review row aligned with the dedicated
-                    # direct-delivery rule; this does not modify pricing setup
-                    # or the radius used by full-route deliveries.
-                    line.sudo().write({'allowed_radius': 50.0})
+                    # Persist the exact destination radius that was used by the
+                    # server-authoritative direct-delivery match.
+                    line.sudo().write({'allowed_radius': direct_match['allowed_radius']})
                     line.sudo()._calculate_gps()
         except IntegrityError:
             # The UUID SQL constraint closes the tiny race between the initial

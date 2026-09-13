@@ -9,6 +9,17 @@
                    ref="qimamhd_transportation_v2_13.transp_store_pricing_view"/>
             <field name="arch" type="xml">
 
+                <xpath expr="//field[@name='pricing_lines']" position="before">
+                    <group string="إعداد نطاق GPS للوجهات" col="4">
+                        <field name="driver_app_default_gps_radius"/>
+                        <button name="action_apply_driver_app_gps_radius"
+                                type="object"
+                                string="تحديث نطاق سجلات الوجهات"
+                                class="oe_highlight"
+                                confirm="سيتم تحديث مجال GPS لكل وجهات هذا المصدر بالقيمة المحددة. هل تريد المتابعة؟"/>
+                    </group>
+                </xpath>
+
                 <xpath expr="//field[@name='pricing_lines']/tree/field[@name='gbs_to']"
                        position="after">
                     <field name="gps_radius"

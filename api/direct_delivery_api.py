@@ -5,7 +5,6 @@ from odoo.http import request
 
 from .common import authenticate_driver, error, float_value, ok, read_json_body
 from .direct_delivery_logic import (
-    DIRECT_DELIVERY_RADIUS_METERS,
     get_direct_delivery_context,
     get_max_gps_accuracy,
     match_direct_destination,
@@ -45,7 +44,7 @@ class DriverAppDirectDeliveryAPI(http.Controller):
             },
             'destination_mode': 'gps_auto_match',
             'destination_locked': True,
-            'allowed_radius': DIRECT_DELIVERY_RADIUS_METERS,
+            'radius_source': 'destination',
             'max_gps_accuracy': get_max_gps_accuracy(driver),
         })
 
@@ -97,11 +96,11 @@ class DriverAppDirectDeliveryAPI(http.Controller):
                 'gps_configured': True,
                 'destination_latitude': match['latitude'],
                 'destination_longitude': match['longitude'],
-                'allowed_radius': DIRECT_DELIVERY_RADIUS_METERS,
+                'allowed_radius': match['allowed_radius'],
             },
             'gps_distance': match['distance'],
             'gps_accuracy': match['gps_accuracy'],
             'effective_distance': match['effective_distance'],
-            'allowed_radius': DIRECT_DELIVERY_RADIUS_METERS,
+            'allowed_radius': match['allowed_radius'],
             'max_gps_accuracy': get_max_gps_accuracy(driver),
         })

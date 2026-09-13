@@ -34,6 +34,67 @@ class TrnspStorePricingLines(models.Model):
                 )
 
 
+class TrnspStorePricingDriverAppGps(models.Model):
+    _inherit = 'trnsp.store.pricing'
+
+    driver_app_default_gps_radius = fields.Float(
+        string='النطاق المسموح الافتراضي للوجهات (متر)',
+        default=200.0,
+        help='قيمة مساعدة لتحديث مجال GPS لكل وجهات هذا المصدر دفعة واحدة. وقت التشغيل يعتمد التطبيق وAPI على gps_radius المحفوظ في كل سجل وجهة.'
+    )
+
+    @api.constrains('driver_app_default_gps_radius')
+    def _check_driver_app_default_gps_radius(self):
+        for rec in self:
+            if rec.driver_app_default_gps_radius <= 0:
+                raise ValidationError(_('النطاق المسموح الافتراضي يجب أن يكون أكبر من صفر متر.'))
+
+    def action_apply_driver_app_gps_radius(self):
+        self.ensure_one()
+        radius = float(self.driver_app_default_gps_radius or 0.0)
+        if radius <= 0:
+            raise ValidationError(_('النطاق المسموح الافتراضي يجب أن يكون أكبر من صفر متر.'))
+        lines = self.pricing_lines.filtered(lambda line: bool(line.destination_path_id))
+        if not lines:
+            raise ValidationError(_('لا توجد وجهات في هذا السجل لتحديث نطاق GPS لها.'))
+        lines.write({'gps_radius': radius})
+        return True
+
+
+class TrnspStoreAreasDriverAppFilter(models.Model):
+    _inherit = 'trnsp.store.areas'
+
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        """Filter destination dropdowns for manual driver-app rows by source.
+
+        The context key is supplied only by the driver-app request line view, so
+        existing destination selectors elsewhere keep their legacy behaviour.
+        """
+        args = list(args or [])
+        source_id = self.env.context.get('driver_app_source_path_id')
+        company_id = self.env.context.get('driver_app_line_company_id')
+        try:
+            source_id = int(source_id or 0)
+        except (TypeError, ValueError):
+            source_id = 0
+        try:
+            company_id = int(company_id or 0)
+        except (TypeError, ValueError):
+            company_id = 0
+        if source_id:
+            Pricing = self.env['trnsp.store.pricing'].sudo()
+            pricing_domain = [('source_path_id', '=', source_id)]
+            if company_id and 'company_id' in Pricing._fields:
+                pricing_domain += ['|', ('company_id', '=', False), ('company_id', '=', company_id)]
+            pricing = Pricing.search(pricing_domain)
+            destination_ids = pricing.mapped('pricing_lines.destination_path_id').ids
+            args.append(('id', 'in', destination_ids or [0]))
+        return super(TrnspStoreAreasDriverAppFilter, self).name_search(
+            name=name, args=args, operator=operator, limit=limit
+        )
+
+
 class StoreDriversRequests(models.Model):
     _inherit = 'trnsp.store.drivers.requests'
 
@@ -771,10 +832,15 @@ class StoreDriverRequestLine(models.Model):
         readonly=True
     )
 
+    allowed_product_car_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_product_car_ids',
+        string='السيارات المسموحة'
+    )
     product_car_id = fields.Many2one(
         'product.product',
         string='السيارة',
-        domain="[('car_flag','=',True)]",
+        domain="[('id','in',allowed_product_car_ids)]",
         required=True
     )
     source_path_ids = fields.Many2many(
@@ -1133,13 +1199,43 @@ class StoreDriverRequestLine(models.Model):
             if not rec.source_path_id and defaults.get('source_path_id'):
                 rec.source_path_id = defaults['source_path_id']
 
-    def _compute_source_path_ids(self):
-        pricing = self.env['trnsp.store.pricing'].sudo().search([
-            ('source_path_id', '!=', False)
-        ])
-        allowed_source_ids = pricing.mapped('source_path_id').ids
+    @api.depends('batch_id.driver_id', 'batch_id.company_id')
+    def _compute_allowed_product_car_ids(self):
+        Product = self.env['product.product'].sudo()
         for rec in self:
-            rec.source_path_ids = [(6, 0, allowed_source_ids)]
+            driver = rec.batch_id.driver_id
+            company = rec.batch_id.company_id
+            if not driver:
+                rec.allowed_product_car_ids = [(6, 0, [])]
+                continue
+
+            assigned_domain = [('car_flag', '=', True), ('car_driver_name', '=', driver.id)]
+            if 'trailer_flag' in Product._fields:
+                assigned_domain.append(('trailer_flag', '=', False))
+            if 'company_id' in Product._fields and company:
+                assigned_domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
+            assigned_car = Product.search(assigned_domain, limit=1)
+            if not assigned_car or 'car_area_id' not in Product._fields or not assigned_car.car_area_id:
+                rec.allowed_product_car_ids = [(6, 0, assigned_car.ids)]
+                continue
+
+            allowed_domain = [
+                ('car_flag', '=', True),
+                ('car_area_id', '=', assigned_car.car_area_id.id),
+            ]
+            if 'trailer_flag' in Product._fields:
+                allowed_domain.append(('trailer_flag', '=', False))
+            if 'company_id' in Product._fields and company:
+                allowed_domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
+            rec.allowed_product_car_ids = [(6, 0, Product.search(allowed_domain).ids)]
+
+    def _compute_source_path_ids(self):
+        Pricing = self.env['trnsp.store.pricing'].sudo()
+        for rec in self:
+            domain = [('source_path_id', '!=', False)]
+            if 'company_id' in Pricing._fields and rec.company_id:
+                domain += ['|', ('company_id', '=', False), ('company_id', '=', rec.company_id.id)]
+            rec.source_path_ids = [(6, 0, Pricing.search(domain).mapped('source_path_id').ids)]
 
     @api.depends('source_path_id')
     def _compute_destination_path_ids(self):
@@ -1148,9 +1244,11 @@ class StoreDriverRequestLine(models.Model):
                 rec.destination_path_ids = False
                 continue
 
-            pricing = self.env['trnsp.store.pricing'].sudo().search([
-                ('source_path_id', '=', rec.source_path_id.id)
-            ])
+            Pricing = self.env['trnsp.store.pricing'].sudo()
+            domain = [('source_path_id', '=', rec.source_path_id.id)]
+            if 'company_id' in Pricing._fields and rec.company_id:
+                domain += ['|', ('company_id', '=', False), ('company_id', '=', rec.company_id.id)]
+            pricing = Pricing.search(domain)
 
             rec.destination_path_ids = (
                 pricing.mapped('pricing_lines.destination_path_id').ids
