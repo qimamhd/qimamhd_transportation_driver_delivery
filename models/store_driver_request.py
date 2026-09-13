@@ -64,6 +64,65 @@ class TrnspStorePricingDriverAppGps(models.Model):
 class TrnspStoreAreasDriverAppFilter(models.Model):
     _inherit = 'trnsp.store.areas'
 
+    driver_app_source_ids = fields.Many2many(
+        'trnsp.cars.areas',
+        compute='_compute_driver_app_source_ids',
+        search='_search_driver_app_source_ids',
+        string='مصادر تطبيق السائق',
+    )
+
+    def _compute_driver_app_source_ids(self):
+        """Technical helper used only by the manual driver-app destination domain.
+
+        It is intentionally non-stored so no existing destination data/schema is
+        rewritten during upgrade. Runtime filtering still comes from pricing.
+        """
+        PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
+        for rec in self:
+            lines = PricingLine.search([('destination_path_id', '=', rec.id)])
+            rec.driver_app_source_ids = [(6, 0, lines.mapped('header_id.source_path_id').ids)]
+
+    @api.model
+    def _search_driver_app_source_ids(self, operator, value):
+        """Translate a source-domain directly to destinations through pricing.
+
+        Odoo 13 editable one2many rows do not always refresh a computed M2M/context
+        before opening a many2one dropdown.  This searchable technical field makes
+        the destination domain depend directly on the current source value, so the
+        ORM performs the final filtering even when the client-side helper list is
+        stale.
+        """
+        if operator not in ('in', '='):
+            return [('id', '=', 0)]
+
+        if isinstance(value, (list, tuple, set)):
+            source_ids = [int(v) for v in value if v]
+        else:
+            source_ids = [int(value)] if value else []
+        if not source_ids:
+            return [('id', '=', 0)]
+
+        PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
+        domain = [('header_id.source_path_id', 'in', source_ids)]
+
+        company_id = (
+            self.env.context.get('driver_app_line_company_id')
+            or self.env.context.get('driver_app_parent_company_id')
+        )
+        try:
+            company_id = int(company_id or 0)
+        except (TypeError, ValueError):
+            company_id = 0
+        if company_id and 'company_id' in self.env['trnsp.store.pricing']._fields:
+            domain += [
+                '|',
+                ('header_id.company_id', '=', False),
+                ('header_id.company_id', '=', company_id),
+            ]
+
+        destination_ids = PricingLine.search(domain).mapped('destination_path_id').ids
+        return [('id', 'in', destination_ids or [0])]
+
     @api.model
     def name_search(self, name='', args=None, operator='ilike', limit=100):
         """Filter destination dropdowns for manual driver-app rows by source.
