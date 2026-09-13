@@ -71,12 +71,81 @@ class TrnspStoreAreasDriverAppFilter(models.Model):
         string='مصادر تطبيق السائق',
     )
 
-    def _compute_driver_app_source_ids(self):
-        """Technical helper used only by the manual driver-app destination domain.
+    @api.model
+    def _driver_app_context_id(self, value):
+        """Normalize a many2one value coming from the Odoo 13 web client.
 
-        It is intentionally non-stored so no existing destination data/schema is
-        rewritten during upgrade. Runtime filtering still comes from pricing.
+        In editable one2many rows a many2one context value may arrive either as
+        an integer id or as ``[id, display_name]`` / ``(id, display_name)``.
+        Treating the latter as an int used to fail silently and disabled the
+        destination filter.
         """
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else False
+        elif isinstance(value, dict):
+            value = value.get('id')
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @api.model
+    def _driver_app_destination_filter_source_company(self):
+        """Resolve the authoritative source/company for manual destination lookup.
+
+        Prefer the current row source.  If the editable row has not propagated
+        it yet, derive the source from the driver's assigned car.  This keeps
+        the dropdown fail-closed instead of falling back to every destination.
+        """
+        ctx = self.env.context
+        source_id = self._driver_app_context_id(ctx.get('driver_app_source_path_id'))
+        company_id = self._driver_app_context_id(
+            ctx.get('driver_app_line_company_id')
+            or ctx.get('driver_app_parent_company_id')
+        )
+        driver_id = self._driver_app_context_id(ctx.get('driver_app_parent_driver_id'))
+
+        if not company_id and driver_id:
+            driver = self.env['hr.employee'].browse(driver_id).exists()
+            if driver and driver.company_id:
+                company_id = driver.company_id.id
+
+        if not source_id and driver_id:
+            Product = self.env['product.product'].sudo()
+            assigned_domain = [
+                ('car_flag', '=', True),
+                ('car_driver_name', '=', driver_id),
+            ]
+            if 'trailer_flag' in Product._fields:
+                assigned_domain.append(('trailer_flag', '=', False))
+            if 'company_id' in Product._fields and company_id:
+                assigned_domain += [
+                    '|',
+                    ('company_id', '=', False),
+                    ('company_id', '=', company_id),
+                ]
+            assigned_car = Product.search(assigned_domain, limit=1)
+            if assigned_car and 'car_area_id' in assigned_car._fields and assigned_car.car_area_id:
+                source_id = assigned_car.car_area_id.id
+
+        return source_id, company_id
+
+    @api.model
+    def _driver_app_allowed_destination_ids(self, source_id, company_id=0):
+        if not source_id:
+            return []
+        Pricing = self.env['trnsp.store.pricing'].sudo()
+        pricing_domain = [('source_path_id', '=', source_id)]
+        if company_id and 'company_id' in Pricing._fields:
+            pricing_domain += [
+                '|',
+                ('company_id', '=', False),
+                ('company_id', '=', company_id),
+            ]
+        return Pricing.search(pricing_domain).mapped('pricing_lines.destination_path_id').ids
+
+    def _compute_driver_app_source_ids(self):
+        """Technical helper used only by the manual driver-app destination domain."""
         PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
         for rec in self:
             lines = PricingLine.search([('destination_path_id', '=', rec.id)])
@@ -84,35 +153,24 @@ class TrnspStoreAreasDriverAppFilter(models.Model):
 
     @api.model
     def _search_driver_app_source_ids(self, operator, value):
-        """Translate a source-domain directly to destinations through pricing.
-
-        Odoo 13 editable one2many rows do not always refresh a computed M2M/context
-        before opening a many2one dropdown.  This searchable technical field makes
-        the destination domain depend directly on the current source value, so the
-        ORM performs the final filtering even when the client-side helper list is
-        stale.
-        """
         if operator not in ('in', '='):
             return [('id', '=', 0)]
 
-        if isinstance(value, (list, tuple, set)):
-            source_ids = [int(v) for v in value if v]
-        else:
-            source_ids = [int(value)] if value else []
+        raw_values = value if isinstance(value, (list, tuple, set)) else [value]
+        source_ids = []
+        for raw in raw_values:
+            normalized = self._driver_app_context_id(raw)
+            if normalized:
+                source_ids.append(normalized)
         if not source_ids:
             return [('id', '=', 0)]
 
         PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
         domain = [('header_id.source_path_id', 'in', source_ids)]
-
-        company_id = (
+        company_id = self._driver_app_context_id(
             self.env.context.get('driver_app_line_company_id')
             or self.env.context.get('driver_app_parent_company_id')
         )
-        try:
-            company_id = int(company_id or 0)
-        except (TypeError, ValueError):
-            company_id = 0
         if company_id and 'company_id' in self.env['trnsp.store.pricing']._fields:
             domain += [
                 '|',
@@ -125,30 +183,18 @@ class TrnspStoreAreasDriverAppFilter(models.Model):
 
     @api.model
     def name_search(self, name='', args=None, operator='ilike', limit=100):
-        """Filter destination dropdowns for manual driver-app rows by source.
+        """Hard-filter the manual-entry destination dropdown by the row source.
 
-        The context key is supplied only by the driver-app request line view, so
-        existing destination selectors elsewhere keep their legacy behaviour.
+        The explicit marker prevents changing destination selectors elsewhere.
+        For manual driver-app rows the filter is fail-closed: if no source can
+        be resolved, no destinations are returned rather than all destinations.
         """
         args = list(args or [])
-        source_id = self.env.context.get('driver_app_source_path_id')
-        company_id = self.env.context.get('driver_app_line_company_id') or self.env.context.get('driver_app_parent_company_id')
-        try:
-            source_id = int(source_id or 0)
-        except (TypeError, ValueError):
-            source_id = 0
-        try:
-            company_id = int(company_id or 0)
-        except (TypeError, ValueError):
-            company_id = 0
-        if source_id:
-            Pricing = self.env['trnsp.store.pricing'].sudo()
-            pricing_domain = [('source_path_id', '=', source_id)]
-            if company_id and 'company_id' in Pricing._fields:
-                pricing_domain += ['|', ('company_id', '=', False), ('company_id', '=', company_id)]
-            pricing = Pricing.search(pricing_domain)
-            destination_ids = pricing.mapped('pricing_lines.destination_path_id').ids
+        if self.env.context.get('driver_app_manual_destination_filter'):
+            source_id, company_id = self._driver_app_destination_filter_source_company()
+            destination_ids = self._driver_app_allowed_destination_ids(source_id, company_id)
             args.append(('id', 'in', destination_ids or [0]))
+
         return super(TrnspStoreAreasDriverAppFilter, self).name_search(
             name=name, args=args, operator=operator, limit=limit
         )
