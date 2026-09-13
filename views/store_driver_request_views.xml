@@ -133,7 +133,7 @@
                                         <field name="destination_path_ids" invisible="1"/>
                                         <field name="destination_path_id"
                                                domain="[('id','in',destination_path_ids)]"
-                                               context="{'driver_app_source_path_id': source_path_id, 'driver_app_line_company_id': company_id}"
+                                               context="{'driver_app_source_path_id': source_path_id}"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="driver_latitude" optional="hide"

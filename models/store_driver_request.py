@@ -73,7 +73,7 @@ class TrnspStoreAreasDriverAppFilter(models.Model):
         """
         args = list(args or [])
         source_id = self.env.context.get('driver_app_source_path_id')
-        company_id = self.env.context.get('driver_app_line_company_id')
+        company_id = self.env.context.get('driver_app_line_company_id') or self.env.context.get('driver_app_parent_company_id')
         try:
             source_id = int(source_id or 0)
         except (TypeError, ValueError):
