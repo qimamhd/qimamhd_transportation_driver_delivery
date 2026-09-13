@@ -924,7 +924,7 @@ class StoreDriverRequestLine(models.Model):
     request_time = fields.Char(
         string='الوقت',
         required=True,
-        help='الوقت بصيغة HH:MM:SS'
+        help='الوقت بصيغة HH:MM'
     )
     trip_sheet_image = fields.Binary(
         string='صورة شيت الرحلة',
@@ -1291,10 +1291,11 @@ class StoreDriverRequestLine(models.Model):
 
     @api.model
     def _manual_current_time_value(self, batch=None):
-        """Current HH:MM:SS using the driver-app company timezone.
+        """Current HH:MM using the driver-app company timezone.
 
-        Manual inline rows must use the same trusted company clock as the API,
-        not the raw server timezone.  Existing API values are never overridden.
+        Manual inline rows use the same trusted company clock as the API, but
+        omit seconds for a cleaner manual-entry value. Existing API-provided
+        request_time values are not overridden.
         """
         company = batch.company_id if batch and batch.company_id else self.env['res.company']
         if not company:
@@ -1307,10 +1308,10 @@ class StoreDriverRequestLine(models.Model):
         if not company:
             company = self.env.user.company_id
         if company and hasattr(company, '_driver_app_local_now'):
-            return company._driver_app_local_now().strftime('%H:%M:%S')
+            return company._driver_app_local_now().strftime('%H:%M')
         return fields.Datetime.context_timestamp(
             self, fields.Datetime.from_string(fields.Datetime.now())
-        ).strftime('%H:%M:%S')
+        ).strftime('%H:%M')
 
     @api.model
     def _manual_driver_defaults(self, batch):

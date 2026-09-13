@@ -136,7 +136,7 @@
                                         <field name="destination_path_id" invisible="1"/>
                                         <field name="manual_destination_pricing_line_id"
                                                string="الوجهة"
-                                               domain="[('header_id.source_path_id','=',source_path_id), '|', ('header_id.company_id','=',False), ('header_id.company_id','=',company_id)]"
+                                               domain="[('header_id.source_path_id','=',source_path_id)]"
                                                context="{'driver_app_destination_picker': True}"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
