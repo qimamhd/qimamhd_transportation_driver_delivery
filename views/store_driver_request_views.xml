@@ -128,6 +128,7 @@
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="source_path_ids" invisible="1"/>
                                         <field name="source_path_id"
+                                               domain="[('id','in',source_path_ids)]"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="destination_path_ids" invisible="1"/>
