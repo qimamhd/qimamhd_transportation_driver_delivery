@@ -1236,69 +1236,83 @@ class StoreDriverRequestLine(models.Model):
             domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
         return Product.search(domain, limit=1)
 
+    def _manual_allowed_cars(self):
+        """Return cars allowed for this driver's manual-entry line.
+
+        The driver's assigned car is authoritative for the operational area.
+        Keep the legacy shared-company behavior (company_id=False) intact.
+        """
+        self.ensure_one()
+        Product = self.env['product.product'].sudo()
+        driver, company = self._manual_filter_driver_company()
+        assigned_car = self._manual_assigned_car() if driver else Product
+        if not assigned_car:
+            return Product
+        if 'car_area_id' not in Product._fields or not assigned_car.car_area_id:
+            return assigned_car
+
+        domain = [
+            ('car_flag', '=', True),
+            ('car_area_id', '=', assigned_car.car_area_id.id),
+        ]
+        if 'trailer_flag' in Product._fields:
+            domain.append(('trailer_flag', '=', False))
+        if 'company_id' in Product._fields and company:
+            domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
+        return Product.search(domain)
+
+    def _manual_allowed_sources(self):
+        """Return the single priced source/area allowed for manual entry."""
+        self.ensure_one()
+        Area = self.env['trnsp.cars.areas'].sudo()
+        _driver, company = self._manual_filter_driver_company()
+        assigned_car = self._manual_assigned_car()
+        if (
+            not assigned_car
+            or 'car_area_id' not in assigned_car._fields
+            or not assigned_car.car_area_id
+        ):
+            return Area
+
+        Pricing = self.env['trnsp.store.pricing'].sudo()
+        domain = [('source_path_id', '=', assigned_car.car_area_id.id)]
+        if 'company_id' in Pricing._fields and company:
+            domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
+        return assigned_car.car_area_id if Pricing.search(domain, limit=1) else Area
+
+    def _manual_allowed_destinations(self, source=None):
+        """Return destinations configured in pricing for the allowed source."""
+        self.ensure_one()
+        Destination = self.env['trnsp.store.areas'].sudo()
+        source = source or self.source_path_id
+        if not source:
+            return Destination
+
+        allowed_sources = self._manual_allowed_sources()
+        if source not in allowed_sources:
+            return Destination
+
+        _driver, company = self._manual_filter_driver_company()
+        Pricing = self.env['trnsp.store.pricing'].sudo()
+        domain = [('source_path_id', '=', source.id)]
+        if 'company_id' in Pricing._fields and company:
+            domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
+        return Pricing.search(domain).mapped('pricing_lines.destination_path_id')
+
     @api.depends('batch_id.driver_id', 'batch_id.company_id')
     def _compute_allowed_product_car_ids(self):
-        Product = self.env['product.product'].sudo()
         for rec in self:
-            driver, company = rec._manual_filter_driver_company()
-            assigned_car = rec._manual_assigned_car() if driver else Product
-            if not assigned_car:
-                rec.allowed_product_car_ids = [(6, 0, [])]
-                continue
+            rec.allowed_product_car_ids = [(6, 0, rec._manual_allowed_cars().ids)]
 
-            # Same rule as the app: the driver's assigned car defines the
-            # operational source/area; manual selection may only use cars from
-            # that same product.template car_area_id.
-            if 'car_area_id' not in Product._fields or not assigned_car.car_area_id:
-                rec.allowed_product_car_ids = [(6, 0, assigned_car.ids)]
-                continue
-
-            allowed_domain = [
-                ('car_flag', '=', True),
-                ('car_area_id', '=', assigned_car.car_area_id.id),
-            ]
-            if 'trailer_flag' in Product._fields:
-                allowed_domain.append(('trailer_flag', '=', False))
-            if 'company_id' in Product._fields and company:
-                allowed_domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
-            rec.allowed_product_car_ids = [(6, 0, Product.search(allowed_domain).ids)]
-
+    @api.depends('batch_id.driver_id', 'batch_id.company_id')
     def _compute_source_path_ids(self):
-        Pricing = self.env['trnsp.store.pricing'].sudo()
         for rec in self:
-            _driver, company = rec._manual_filter_driver_company()
-            assigned_car = rec._manual_assigned_car()
-            if (
-                not assigned_car
-                or 'car_area_id' not in assigned_car._fields
-                or not assigned_car.car_area_id
-            ):
-                rec.source_path_ids = [(6, 0, [])]
-                continue
+            rec.source_path_ids = [(6, 0, rec._manual_allowed_sources().ids)]
 
-            # The manual line source is locked by domain to the source of the
-            # driver's assigned car.  Do not expose the company's other sources.
-            domain = [('source_path_id', '=', assigned_car.car_area_id.id)]
-            if 'company_id' in Pricing._fields and company:
-                domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
-            has_pricing = bool(Pricing.search(domain, limit=1))
-            rec.source_path_ids = [(6, 0, assigned_car.car_area_id.ids if has_pricing else [])]
-
-    @api.depends('source_path_id', 'batch_id.company_id')
+    @api.depends('source_path_id', 'batch_id.driver_id', 'batch_id.company_id')
     def _compute_destination_path_ids(self):
         for rec in self:
-            if not rec.source_path_id:
-                rec.destination_path_ids = [(6, 0, [])]
-                continue
-
-            _driver, company = rec._manual_filter_driver_company()
-            Pricing = self.env['trnsp.store.pricing'].sudo()
-            domain = [('source_path_id', '=', rec.source_path_id.id)]
-            if 'company_id' in Pricing._fields and company:
-                domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
-            pricing = Pricing.search(domain)
-            destination_ids = pricing.mapped('pricing_lines.destination_path_id').ids
-            rec.destination_path_ids = [(6, 0, destination_ids)]
+            rec.destination_path_ids = [(6, 0, rec._manual_allowed_destinations().ids)]
 
     @api.onchange('source_path_id')
     def _onchange_source_path_id(self):
@@ -1310,18 +1324,8 @@ class StoreDriverRequestLine(models.Model):
         self.gps_distance = 0.0
         self.gps_valid = False
 
-        self._compute_source_path_ids()
-        source_ids = self.source_path_ids.ids
-
-        destination_ids = []
-        if self.source_path_id and self.source_path_id.id in source_ids:
-            _driver, company = self._manual_filter_driver_company()
-            Pricing = self.env['trnsp.store.pricing'].sudo()
-            domain = [('source_path_id', '=', self.source_path_id.id)]
-            if 'company_id' in Pricing._fields and company:
-                domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
-            destination_ids = Pricing.search(domain).mapped('pricing_lines.destination_path_id').ids
-
+        source_ids = self._manual_allowed_sources().ids
+        destination_ids = self._manual_allowed_destinations().ids
         return {
             'domain': {
                 'source_path_id': [('id', 'in', source_ids or [0])],
@@ -1331,14 +1335,17 @@ class StoreDriverRequestLine(models.Model):
 
     @api.onchange('product_car_id', 'batch_id')
     def _onchange_available_source_paths(self):
-        self._compute_allowed_product_car_ids()
-        self._compute_source_path_ids()
-        allowed_car_ids = self.allowed_product_car_ids.ids
-        source_ids = self.source_path_ids.ids
+        allowed_cars = self._manual_allowed_cars()
+        allowed_sources = self._manual_allowed_sources()
+        allowed_car_ids = allowed_cars.ids
+        source_ids = allowed_sources.ids
 
-        # Any allowed car belongs to the driver's same operational source.
-        # Keep the source defaulted/locked to that area and reset destination
-        # if a stale UI value was present.
+        if self.product_car_id and self.product_car_id not in allowed_cars:
+            self.product_car_id = False
+
+        # Every allowed car belongs to the driver's assigned operational area.
+        # Keep source synchronized with the selected/default car and clear a
+        # stale destination whenever the source changes.
         car_source = (
             self.product_car_id.car_area_id
             if self.product_car_id
@@ -1346,22 +1353,17 @@ class StoreDriverRequestLine(models.Model):
             and self.product_car_id.car_area_id
             else False
         )
-        if car_source and car_source.id in source_ids:
+        if car_source and car_source in allowed_sources:
             if self.source_path_id != car_source:
                 self.source_path_id = car_source
                 self.destination_path_id = False
-        elif self.source_path_id and self.source_path_id.id not in source_ids:
+        elif self.source_path_id and self.source_path_id not in allowed_sources:
             self.source_path_id = False
             self.destination_path_id = False
 
-        destination_ids = []
-        if self.source_path_id:
-            _driver, company = self._manual_filter_driver_company()
-            Pricing = self.env['trnsp.store.pricing'].sudo()
-            domain = [('source_path_id', '=', self.source_path_id.id)]
-            if 'company_id' in Pricing._fields and company:
-                domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
-            destination_ids = Pricing.search(domain).mapped('pricing_lines.destination_path_id').ids
+        destination_ids = self._manual_allowed_destinations().ids
+        if self.destination_path_id and self.destination_path_id.id not in destination_ids:
+            self.destination_path_id = False
 
         return {
             'domain': {
@@ -1510,6 +1512,7 @@ class StoreDriverRequestLine(models.Model):
     @api.constrains(
         'request_date',
         'batch_id',
+        'product_car_id',
         'source_path_id',
         'destination_path_id'
     )
@@ -1528,25 +1531,48 @@ class StoreDriverRequestLine(models.Model):
                         _('تاريخ التوصيلة لا ينتمي إلى السنة المحددة في ملف السائق.')
                     )
 
-            if rec.source_path_id:
-                pricing_header = self.env['trnsp.store.pricing'].sudo().search([
-                    ('source_path_id', '=', rec.source_path_id.id)
-                ], limit=1)
-                if not pricing_header:
+            # UI domains are only convenience. Re-derive the same rules
+            # server-side so RPC/import cannot bypass driver area/company.
+            if rec.batch_id and rec.batch_id.driver_id:
+                allowed_cars = rec._manual_allowed_cars()
+                allowed_sources = rec._manual_allowed_sources()
+
+                if rec.product_car_id and rec.product_car_id not in allowed_cars:
                     raise ValidationError(
-                        _('مصدر الشحن المحدد غير موجود في شاشة التسعيرات.')
+                        _('السيارة المحددة ليست من سيارات منطقة سيارة السائق أو لا تتبع الشركة المسموحة.')
                     )
 
-            if rec.source_path_id and rec.destination_path_id:
-                pricing_line = self.env['trnsp.store.pricing.lines'].sudo().search([
-                    ('header_id.source_path_id', '=', rec.source_path_id.id),
-                    ('destination_path_id', '=', rec.destination_path_id.id),
-                ], limit=1)
-
-                if not pricing_line:
+                if rec.source_path_id and rec.source_path_id not in allowed_sources:
                     raise ValidationError(
-                        _('الوجهة المحددة غير مرتبطة بمصدر الشحن المحدد في شاشة التسعيرات.')
+                        _('مصدر الشحن يجب أن يطابق منطقة سيارة السائق المحددة.')
                     )
+
+                if rec.source_path_id and rec.destination_path_id:
+                    allowed_destinations = rec._manual_allowed_destinations(rec.source_path_id)
+                    if rec.destination_path_id not in allowed_destinations:
+                        raise ValidationError(
+                            _('الوجهة المحددة غير مرتبطة بمصدر الشحن المحدد في شاشة التسعيرات أو لا تتبع الشركة المسموحة.')
+                        )
+            else:
+                # Preserve the legacy validation for incomplete historical rows.
+                if rec.source_path_id:
+                    pricing_header = self.env['trnsp.store.pricing'].sudo().search([
+                        ('source_path_id', '=', rec.source_path_id.id)
+                    ], limit=1)
+                    if not pricing_header:
+                        raise ValidationError(
+                            _('مصدر الشحن المحدد غير موجود في شاشة التسعيرات.')
+                        )
+
+                if rec.source_path_id and rec.destination_path_id:
+                    pricing_line = self.env['trnsp.store.pricing.lines'].sudo().search([
+                        ('header_id.source_path_id', '=', rec.source_path_id.id),
+                        ('destination_path_id', '=', rec.destination_path_id.id),
+                    ], limit=1)
+                    if not pricing_line:
+                        raise ValidationError(
+                            _('الوجهة المحددة غير مرتبطة بمصدر الشحن المحدد في شاشة التسعيرات.')
+                        )
 
     @api.model
     def create(self, vals):
