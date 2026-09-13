@@ -22,13 +22,15 @@ class HrEmployeeDriverApp(models.Model):
         string='الفرع',
         default=lambda self: self.env.user.branch_id
         if 'branch_id' in self.env.user._fields else False,
-        help='الفرع التشغيلي للسائق. يستخدمه تطبيق السائق عند إنشاء ملف التوصيلات الشهري.'
+        help='الفرع التشغيلي للسائق. يستخدمه تطبيق السائق عند إنشاء ملف التوصيلات الشهري.',
+        track_visibility='onchange'
     )
 
     app_access_enabled = fields.Boolean(
         string='السماح بالدخول لتطبيق السائق',
         default=False,
-        copy=False
+        copy=False,
+        track_visibility='onchange'
     )
 
     # Legacy field kept for database compatibility only.
@@ -73,19 +75,22 @@ class HrEmployeeDriverApp(models.Model):
         string='السماح بفتح التطبيق بالبصمة/Face ID',
         default=True,
         copy=False,
+        track_visibility='onchange',
         help='البصمة نفسها لا تُحفظ في Odoo. التطبيق يستخدم حماية الجهاز لفتح جلسة محفوظة بأمان.'
     )
 
     app_credentials_updated_at = fields.Datetime(
         string='آخر تحديث لبيانات الدخول',
         readonly=True,
-        copy=False
+        copy=False,
+        track_visibility='onchange'
     )
 
     app_last_login = fields.Datetime(
         string='آخر دخول للتطبيق',
         readonly=True,
-        copy=False
+        copy=False,
+        track_visibility='onchange'
     )
 
     app_device_id = fields.Char(
@@ -93,6 +98,7 @@ class HrEmployeeDriverApp(models.Model):
         readonly=True,
         copy=False,
         index=True,
+        track_visibility='onchange',
         groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
     )
 
@@ -100,6 +106,7 @@ class HrEmployeeDriverApp(models.Model):
         string='الجهاز المعتمد',
         readonly=True,
         copy=False,
+        track_visibility='onchange',
         groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
     )
 
@@ -107,6 +114,7 @@ class HrEmployeeDriverApp(models.Model):
         string='تاريخ اعتماد الجهاز',
         readonly=True,
         copy=False,
+        track_visibility='onchange',
         groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
     )
 
@@ -114,6 +122,7 @@ class HrEmployeeDriverApp(models.Model):
         string='آخر دخول من الجهاز المعتمد',
         readonly=True,
         copy=False,
+        track_visibility='onchange',
         groups='qimamhd_transportation_driver_delivery.group_driver_request_manager'
     )
 
@@ -121,14 +130,20 @@ class HrEmployeeDriverApp(models.Model):
         string='محاولات الدخول الفاشلة',
         default=0,
         readonly=True,
-        copy=False
+        copy=False,
+        track_visibility='onchange'
     )
 
     app_locked_until = fields.Datetime(
         string='حظر الدخول حتى',
         readonly=True,
-        copy=False
+        copy=False,
+        track_visibility='onchange'
     )
+
+    # This standard HR field is also the driver's app login identity. Track its
+    # changes together with the app-specific settings shown on the same card.
+    identification_id = fields.Char(track_visibility='onchange')
 
     _sql_constraints = [
         (
@@ -325,6 +340,10 @@ class HrEmployeeDriverApp(models.Model):
         elif device_name and self.app_device_name != str(device_name).strip()[:128]:
             vals['app_device_name'] = str(device_name).strip()[:128]
         super(HrEmployeeDriverApp, self).write(vals)
+        if newly_bound:
+            self.message_post(body=_(
+                'تم ربط جهاز تطبيق السائق تلقائياً أثناء تسجيل الدخول من التطبيق.'
+            ))
         return True, newly_bound
 
     def action_unbind_app_device(self):
@@ -348,6 +367,10 @@ class HrEmployeeDriverApp(models.Model):
             'app_device_bound_at': False,
             'app_device_last_login_at': False,
         })
+        for rec in self:
+            rec.message_post(body=_(
+                'تم تنفيذ إجراء إلغاء ارتباط جهاز تطبيق السائق بواسطة المستخدم: %s'
+            ) % self.env.user.display_name)
         return True
 
     def verify_app_pin(self, pin):
@@ -381,6 +404,10 @@ class HrEmployeeDriverApp(models.Model):
             'app_failed_attempts': 0,
             'app_locked_until': False,
         })
+        for rec in self:
+            rec.message_post(body=_(
+                'تم تنفيذ إجراء فك قفل دخول تطبيق السائق بواسطة المستخدم: %s'
+            ) % self.env.user.display_name)
         return True
 
     def action_clear_app_credentials(self):
@@ -393,4 +420,8 @@ class HrEmployeeDriverApp(models.Model):
             'app_locked_until': False,
             'app_credentials_updated_at': fields.Datetime.now(),
         })
+        for rec in self:
+            rec.message_post(body=_(
+                'تم تنفيذ إجراء إلغاء دخول التطبيق ومسح بيانات الاعتماد بواسطة المستخدم: %s'
+            ) % self.env.user.display_name)
         return True

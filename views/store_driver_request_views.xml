@@ -114,7 +114,7 @@
 
                         <notebook>
                             <page string="التوصيلات">
-                                <field name="request_lines">
+                                <field name="request_lines" context="{'driver_app_parent_driver_id': driver_id, 'driver_app_parent_company_id': company_id}">
                                     <tree editable="bottom" default_order="request_date desc, request_time desc">
                                         <field name="mobile_uuid" optional="hide" readonly="1"/>
                                         <field name="request_date"
@@ -130,6 +130,7 @@
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="destination_path_ids" invisible="1"/>
                                         <field name="destination_path_id"
+                                               domain="[('id','in',destination_path_ids)]"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="driver_latitude" optional="hide"

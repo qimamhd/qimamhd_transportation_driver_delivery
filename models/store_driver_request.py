@@ -406,21 +406,33 @@ class StoreDriverRequestBatch(models.Model):
                     _('توجد بيانات تحويل سابقة أو غير مكتملة. استخدم التراجع عن التحويل أو راجع البيانات قبل المتابعة.')
                 )
 
-            # The legacy settlement header has one car and one source.
-            combos = set(
-                (line.product_car_id.id, line.source_path_id.id)
-                for line in accepted
-            )
-            if len(combos) != 1:
+            # The settlement header still has one source, but a driver may use
+            # different cars across the month's deliveries. Keep the header car
+            # as the driver's assigned/default car and preserve the actually used
+            # car on each settlement line.
+            source_ids = set(line.source_path_id.id for line in accepted)
+            if len(source_ids) != 1:
                 raise ValidationError(
                     _(
-                        'التوصيلات المقبولة تحتوي على أكثر من سيارة أو أكثر من مسار شحن. '
-                        'شاشة تسوية السائق الحالية لا تسمح بتحويلها بأمان في ملف واحد. '
-                        'لم يتم إنشاء أي تسوية.'
+                        'التوصيلات المقبولة تحتوي على أكثر من مسار شحن. '
+                        'لا يمكن تمثيل أكثر من مصدر في رأس تسوية واحدة بأمان.'
                     )
                 )
+            source_id = next(iter(source_ids))
 
-            car_id, source_id = next(iter(combos))
+            Product = self.env['product.product'].sudo()
+            car_domain = [
+                ('car_flag', '=', True),
+                ('car_driver_name', '=', rec.driver_id.id),
+            ]
+            if 'company_id' in Product._fields:
+                car_domain += ['|', ('company_id', '=', False), ('company_id', '=', rec.company_id.id)]
+            default_car = Product.search(car_domain, limit=1)
+            if not default_car:
+                raise ValidationError(
+                    _('لا توجد سيارة افتراضية مرتبطة بالسائق لاستخدامها في رأس التسوية.')
+                )
+            car_id = default_car.id
             month_no = int(rec.month_name)
             last_day = calendar.monthrange(rec.year, month_no)[1]
             from_date = date(rec.year, month_no, 1)
@@ -458,18 +470,26 @@ class StoreDriverRequestBatch(models.Model):
                 'driver_app_batch_id': rec.id,
             })
 
-            # Group this batch's accepted deliveries by destination.
+            # Group by the actually used car + destination + pricing line.
+            # This prevents deliveries made with different cars from being merged
+            # into a settlement line carrying the wrong vehicle.
             destinations = {}
             for line in accepted:
-                destinations.setdefault(
+                group_key = (
+                    line.product_car_id.id,
                     line.destination_path_id.id,
+                    line.pricing_line_id.id,
+                )
+                destinations.setdefault(
+                    group_key,
                     self.env['trnsp.store.driver.request.line']
                 )
-                destinations[line.destination_path_id.id] |= line
+                destinations[group_key] |= line
 
-            for destination_id, source_lines in destinations.items():
+            for group_key, source_lines in destinations.items():
+                line_car_id, destination_id, pricing_line_id = group_key
                 pricing_lines = source_lines.mapped('pricing_line_id')
-                if not pricing_lines or len(pricing_lines) != 1:
+                if not pricing_line_id or not pricing_lines or len(pricing_lines) != 1:
                     raise ValidationError(
                         _('تعذر تحديد تسعيرة واحدة للوجهة أثناء التحويل. لم يتم التحويل.')
                     )
@@ -490,7 +510,7 @@ class StoreDriverRequestBatch(models.Model):
 
                 settlement_line = SettlementLine.create({
                     'header_id': settlement.id,
-                    'product_car_id': car_id,
+                    'product_car_id': line_car_id,
                     'destination_path_id': destination_id,
                     'quantity': qty,
                     'distination_km': distance_km,
@@ -1037,6 +1057,82 @@ class StoreDriverRequestLine(models.Model):
         ),
     ]
 
+    @api.model
+    def default_get(self, fields_list):
+        res = super(StoreDriverRequestLine, self).default_get(fields_list)
+        batch_id = res.get('batch_id') or self.env.context.get('default_batch_id')
+        if batch_id:
+            batch = self.env['trnsp.store.driver.request.batch'].browse(batch_id).exists()
+            if batch:
+                defaults = self._manual_driver_defaults(batch)
+                if 'product_car_id' in fields_list and not res.get('product_car_id'):
+                    res['product_car_id'] = defaults.get('product_car_id')
+                if 'source_path_id' in fields_list and not res.get('source_path_id'):
+                    res['source_path_id'] = defaults.get('source_path_id')
+                return res
+
+        # Inline one2many rows can request defaults before the inverse batch_id
+        # has been assigned. The parent view supplies only these IDs in context.
+        driver_id = self.env.context.get('driver_app_parent_driver_id')
+        company_id = self.env.context.get('driver_app_parent_company_id')
+        if driver_id:
+            Driver = self.env['hr.employee'].browse(driver_id).exists()
+            Company = self.env['res.company'].browse(company_id).exists() if company_id else Driver.company_id
+            Product = self.env['product.product'].sudo()
+            domain = [('car_flag', '=', True), ('car_driver_name', '=', Driver.id)]
+            if 'company_id' in Product._fields and Company:
+                domain += ['|', ('company_id', '=', False), ('company_id', '=', Company.id)]
+            car = Product.search(domain, limit=1)
+            if car:
+                if 'product_car_id' in fields_list and not res.get('product_car_id'):
+                    res['product_car_id'] = car.id
+                if (
+                    'source_path_id' in fields_list
+                    and not res.get('source_path_id')
+                    and 'car_area_id' in car._fields
+                    and car.car_area_id
+                ):
+                    Pricing = self.env['trnsp.store.pricing'].sudo()
+                    pricing_domain = [('source_path_id', '=', car.car_area_id.id)]
+                    if 'company_id' in Pricing._fields and Company:
+                        pricing_domain += ['|', ('company_id', '=', False), ('company_id', '=', Company.id)]
+                    if Pricing.search(pricing_domain, limit=1):
+                        res['source_path_id'] = car.car_area_id.id
+        return res
+
+    @api.model
+    def _manual_driver_defaults(self, batch):
+        """Return safe car/source defaults for manually added app lines."""
+        if not batch or not batch.driver_id:
+            return {}
+        Product = self.env['product.product'].sudo()
+        domain = [('car_flag', '=', True), ('car_driver_name', '=', batch.driver_id.id)]
+        if 'company_id' in Product._fields:
+            domain += ['|', ('company_id', '=', False), ('company_id', '=', batch.company_id.id)]
+        car = Product.search(domain, limit=1)
+        if not car:
+            return {}
+        vals = {'product_car_id': car.id}
+        if 'car_area_id' in car._fields and car.car_area_id:
+            pricing_domain = [('source_path_id', '=', car.car_area_id.id)]
+            Pricing = self.env['trnsp.store.pricing'].sudo()
+            if 'company_id' in Pricing._fields:
+                pricing_domain += ['|', ('company_id', '=', False), ('company_id', '=', batch.company_id.id)]
+            if Pricing.search(pricing_domain, limit=1):
+                vals['source_path_id'] = car.car_area_id.id
+        return vals
+
+    @api.onchange('batch_id')
+    def _onchange_batch_manual_defaults(self):
+        for rec in self:
+            if not rec.batch_id:
+                continue
+            defaults = rec._manual_driver_defaults(rec.batch_id)
+            if not rec.product_car_id and defaults.get('product_car_id'):
+                rec.product_car_id = defaults['product_car_id']
+            if not rec.source_path_id and defaults.get('source_path_id'):
+                rec.source_path_id = defaults['source_path_id']
+
     def _compute_source_path_ids(self):
         pricing = self.env['trnsp.store.pricing'].sudo().search([
             ('source_path_id', '!=', False)
@@ -1097,13 +1193,32 @@ class StoreDriverRequestLine(models.Model):
             ('source_path_id', '!=', False)
         ]).mapped('source_path_id').ids
 
-        if self.source_path_id and self.source_path_id.id not in source_ids:
+        # Manual lines default their source from the selected/default car area
+        # when that area is configured as a pricing source.
+        if (
+            self.product_car_id
+            and 'car_area_id' in self.product_car_id._fields
+            and self.product_car_id.car_area_id
+            and self.product_car_id.car_area_id.id in source_ids
+        ):
+            if self.source_path_id != self.product_car_id.car_area_id:
+                self.source_path_id = self.product_car_id.car_area_id
+                self.destination_path_id = False
+        elif self.source_path_id and self.source_path_id.id not in source_ids:
             self.source_path_id = False
             self.destination_path_id = False
+
+        destination_ids = []
+        if self.source_path_id:
+            pricing = self.env['trnsp.store.pricing'].sudo().search([
+                ('source_path_id', '=', self.source_path_id.id)
+            ])
+            destination_ids = pricing.mapped('pricing_lines.destination_path_id').ids
 
         return {
             'domain': {
                 'source_path_id': [('id', 'in', source_ids)],
+                'destination_path_id': [('id', 'in', destination_ids)],
             }
         }
 
@@ -1292,6 +1407,17 @@ class StoreDriverRequestLine(models.Model):
         batch = self.env['trnsp.store.driver.request.batch'].browse(
             vals.get('batch_id')
         )
+
+        if batch and batch.exists():
+            defaults = self._manual_driver_defaults(batch)
+            vals.setdefault('product_car_id', defaults.get('product_car_id'))
+            vals.setdefault('source_path_id', defaults.get('source_path_id'))
+            # Do not leave explicit False defaults behind; required-field errors
+            # should remain Odoo's normal behavior when no safe default exists.
+            if not vals.get('product_car_id'):
+                vals.pop('product_car_id', None)
+            if not vals.get('source_path_id'):
+                vals.pop('source_path_id', None)
 
         if batch and batch.state != 'draft':
             raise ValidationError(
