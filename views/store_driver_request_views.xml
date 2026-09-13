@@ -133,8 +133,7 @@
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="destination_path_ids" invisible="1"/>
                                         <field name="destination_path_id"
-                                               domain="[('id','in',destination_path_ids), ('driver_app_source_ids','in',[source_path_id])]"
-                                               context="{'driver_app_manual_destination_filter': True, 'driver_app_source_path_id': source_path_id}"
+                                               domain="[('id','in',destination_path_ids)]"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="driver_latitude" optional="hide"

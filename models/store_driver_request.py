@@ -1386,23 +1386,36 @@ class StoreDriverRequestLine(models.Model):
         return assigned_car.car_area_id if Pricing.search(domain, limit=1) else Area
 
     def _manual_allowed_destinations(self, source=None):
-        """Return destinations configured in pricing for the allowed source."""
+        """Return destinations configured for the current source.
+
+        Manual-entry destination filtering deliberately uses pricing *lines* as
+        the single source of truth.  This avoids depending on a computed field
+        on ``trnsp.store.areas`` or on web-client context/name_search timing in
+        editable one2many rows.
+        """
         self.ensure_one()
         Destination = self.env['trnsp.store.areas'].sudo()
         source = source or self.source_path_id
         if not source:
-            return Destination
+            return Destination.browse([])
 
+        # The manual source is already restricted by the driver's car area.
+        # Re-check it here so RPC/onchange paths use the same rule.
         allowed_sources = self._manual_allowed_sources()
         if source not in allowed_sources:
-            return Destination
+            return Destination.browse([])
 
         _driver, company = self._manual_filter_driver_company()
-        Pricing = self.env['trnsp.store.pricing'].sudo()
-        domain = [('source_path_id', '=', source.id)]
-        if 'company_id' in Pricing._fields and company:
-            domain += ['|', ('company_id', '=', False), ('company_id', '=', company.id)]
-        return Pricing.search(domain).mapped('pricing_lines.destination_path_id')
+        PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
+        domain = [('header_id.source_path_id', '=', source.id)]
+        if company and 'company_id' in self.env['trnsp.store.pricing']._fields:
+            domain += [
+                '|',
+                ('header_id.company_id', '=', False),
+                ('header_id.company_id', '=', company.id),
+            ]
+
+        return PricingLine.search(domain).mapped('destination_path_id')
 
     @api.depends('batch_id.driver_id', 'batch_id.company_id')
     def _compute_allowed_product_car_ids(self):
@@ -1417,7 +1430,8 @@ class StoreDriverRequestLine(models.Model):
     @api.depends('source_path_id', 'batch_id.driver_id', 'batch_id.company_id')
     def _compute_destination_path_ids(self):
         for rec in self:
-            rec.destination_path_ids = [(6, 0, rec._manual_allowed_destinations().ids)]
+            destination_ids = rec._manual_allowed_destinations(rec.source_path_id).ids
+            rec.destination_path_ids = [(6, 0, destination_ids)]
 
     @api.onchange('source_path_id')
     def _onchange_source_path_id(self):
@@ -1430,7 +1444,10 @@ class StoreDriverRequestLine(models.Model):
         self.gps_valid = False
 
         source_ids = self._manual_allowed_sources().ids
-        destination_ids = self._manual_allowed_destinations().ids
+        destination_ids = self._manual_allowed_destinations(self.source_path_id).ids
+        # Force the virtual editable-one2many row to carry the exact list used
+        # by the XML domain immediately; do not wait for a later recompute.
+        self.destination_path_ids = [(6, 0, destination_ids)]
         return {
             'domain': {
                 'source_path_id': [('id', 'in', source_ids or [0])],
@@ -1466,7 +1483,8 @@ class StoreDriverRequestLine(models.Model):
             self.source_path_id = False
             self.destination_path_id = False
 
-        destination_ids = self._manual_allowed_destinations().ids
+        destination_ids = self._manual_allowed_destinations(self.source_path_id).ids
+        self.destination_path_ids = [(6, 0, destination_ids)]
         if self.destination_path_id and self.destination_path_id.id not in destination_ids:
             self.destination_path_id = False
 
