@@ -397,6 +397,40 @@ class HrEmployeeDriverApp(models.Model):
         except Exception:
             return False
 
+    def change_app_password_by_driver(self, current_password, new_password):
+        """Change the driver-app password from an authenticated app session.
+
+        This path deliberately bypasses the manager-only ``new_app_password``
+        pseudo field. The caller must already be authenticated by the driver API
+        and must prove knowledge of the current password. Plaintext values are
+        never persisted.
+        """
+        self.ensure_one()
+        current_password = str(current_password or '')
+        new_password = str(new_password or '')
+
+        if not self.app_access_enabled or not self.driver_emp:
+            raise ValidationError(_('دخول التطبيق غير مفعل لهذا السائق.'))
+        if not self.verify_app_password(current_password):
+            return False
+        if len(new_password) < 6:
+            raise ValidationError(_('كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف.'))
+        if len(new_password) > 256:
+            raise ValidationError(_('كلمة المرور الجديدة أطول من الحد المسموح.'))
+        if self.verify_app_password(new_password):
+            raise ValidationError(_('كلمة المرور الجديدة يجب أن تختلف عن كلمة المرور الحالية.'))
+
+        super(HrEmployeeDriverApp, self).write({
+            'app_password_hash': _APP_PASSWORD_CONTEXT.hash(new_password),
+            'app_credentials_updated_at': fields.Datetime.now(),
+            'app_failed_attempts': 0,
+            'app_locked_until': False,
+        })
+        self.message_post(body=_(
+            'قام السائق بتغيير كلمة مرور تطبيق السائق من داخل التطبيق.'
+        ))
+        return True
+
     def action_unlock_app_login(self):
         """Manager-only manual unlock without changing credentials or sessions."""
         self._check_driver_app_manager()

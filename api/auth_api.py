@@ -151,6 +151,105 @@ class DriverAppAuthAPI(http.Controller):
         })
 
     @http.route(
+        '/api/driver/v1/change-password',
+        type='json', auth='public', methods=['POST'], csrf=False
+    )
+    def change_password(self, **kwargs):
+        if request_payload_too_large(16 * 1024):
+            return error(
+                'PAYLOAD_TOO_LARGE',
+                'حجم الطلب أكبر من المسموح.',
+                status=413,
+            )
+
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, current_session = auth
+
+        data = read_json_body()
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        if current_password in (None, ''):
+            return error(
+                'CURRENT_PASSWORD_REQUIRED',
+                'كلمة المرور الحالية مطلوبة.',
+            )
+        if new_password in (None, ''):
+            return error(
+                'NEW_PASSWORD_REQUIRED',
+                'كلمة المرور الجديدة مطلوبة.',
+            )
+        if len(str(current_password)) > 256 or len(str(new_password)) > 256:
+            return error(
+                'INVALID_PASSWORD_INPUT',
+                'بيانات كلمة المرور غير صالحة.',
+            )
+
+        # Rate-limit repeated current-password guessing even with a stolen token.
+        now = fields.Datetime.now()
+        if driver.app_locked_until and driver.app_locked_until > now:
+            return error(
+                'PASSWORD_CHANGE_LOCKED',
+                'تم إيقاف محاولات تغيير كلمة المرور مؤقتًا. حاول لاحقًا.',
+                status=423,
+            )
+
+        try:
+            changed = driver.sudo().change_app_password_by_driver(
+                current_password, new_password
+            )
+        except Exception as exc:
+            # Expected model validations are safe to show; do not expose stack or
+            # credential values.
+            from odoo.exceptions import ValidationError
+            if isinstance(exc, ValidationError):
+                return error('PASSWORD_CHANGE_INVALID', str(exc), status=400)
+            request.env.cr.rollback()
+            return error(
+                'PASSWORD_CHANGE_FAILED',
+                'تعذر تغيير كلمة المرور حاليًا.',
+                status=500,
+            )
+
+        if not changed:
+            failed = (driver.app_failed_attempts or 0) + 1
+            vals = {'app_failed_attempts': failed}
+            if failed >= 5:
+                vals['app_locked_until'] = now + timedelta(minutes=15)
+            driver.sudo().write(vals)
+            return error(
+                'CURRENT_PASSWORD_INCORRECT',
+                'كلمة المرور الحالية غير صحيحة.',
+                status=401,
+            )
+
+        # Keep the session that performed the verified change, but revoke any
+        # other active app sessions. Device binding itself is intentionally kept.
+        other_sessions = request.env['trnsp.driver.app.session'].sudo().search([
+            ('employee_id', '=', driver.id),
+            ('id', '!=', current_session.id),
+            ('revoked', '=', False),
+        ])
+        if other_sessions:
+            other_sessions.write({'revoked': True})
+
+        # Password changes invalidate persistent biometric credentials. The app
+        # also removes its local credential and the driver may enroll it again.
+        credentials = request.env[
+            'trnsp.driver.biometric.credential'
+        ].sudo().search([
+            ('employee_id', '=', driver.id),
+            ('revoked', '=', False),
+        ])
+        if credentials:
+            credentials.write({'revoked': True})
+
+        return ok({
+            'biometric_revoked': bool(credentials),
+        }, message='تم تغيير كلمة المرور بنجاح.')
+
+    @http.route(
         '/api/driver/v1/logout',
         type='json', auth='public', methods=['POST'], csrf=False
     )
