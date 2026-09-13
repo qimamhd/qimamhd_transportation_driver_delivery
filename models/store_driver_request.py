@@ -33,6 +33,18 @@ class TrnspStorePricingLines(models.Model):
                     _('مجال GPS لا يمكن أن يكون قيمة سالبة.')
                 )
 
+    def name_get(self):
+        """Show the destination name when pricing lines are used as the
+        manual-entry destination picker.  Outside that picker preserve the
+        original pricing-line display name exactly as before.
+        """
+        if self.env.context.get('driver_app_destination_picker'):
+            return [
+                (rec.id, rec.destination_path_id.display_name or '')
+                for rec in self
+            ]
+        return super(TrnspStorePricingLines, self).name_get()
+
 
 class TrnspStorePricingDriverAppGps(models.Model):
     _inherit = 'trnsp.store.pricing'
@@ -969,6 +981,15 @@ class StoreDriverRequestLine(models.Model):
         string='الوجهة',
         required=True
     )
+    manual_destination_pricing_line_id = fields.Many2one(
+        'trnsp.store.pricing.lines',
+        string='الوجهة',
+        compute='_compute_manual_destination_pricing_line_id',
+        inverse='_inverse_manual_destination_pricing_line_id',
+        store=True,
+        copy=False,
+        help='حقل واجهة للإدخال اليدوي فقط. يفلتر سجلات التسعير مباشرة حسب المصدر ثم يحفظ الوجهة في الحقل الأصلي.'
+    )
     pricing_line_id = fields.Many2one(
         'trnsp.store.pricing.lines',
         string='إعداد المسار',
@@ -1226,6 +1247,8 @@ class StoreDriverRequestLine(models.Model):
     @api.model
     def default_get(self, fields_list):
         res = super(StoreDriverRequestLine, self).default_get(fields_list)
+        if 'request_time' in fields_list and not res.get('request_time'):
+            res['request_time'] = self._manual_current_time_value()
         batch_id = res.get('batch_id') or self.env.context.get('default_batch_id')
         if batch_id:
             batch = self.env['trnsp.store.driver.request.batch'].browse(batch_id).exists()
@@ -1265,6 +1288,29 @@ class StoreDriverRequestLine(models.Model):
                     if Pricing.search(pricing_domain, limit=1):
                         res['source_path_id'] = car.car_area_id.id
         return res
+
+    @api.model
+    def _manual_current_time_value(self, batch=None):
+        """Current HH:MM:SS using the driver-app company timezone.
+
+        Manual inline rows must use the same trusted company clock as the API,
+        not the raw server timezone.  Existing API values are never overridden.
+        """
+        company = batch.company_id if batch and batch.company_id else self.env['res.company']
+        if not company:
+            company_id = self.env.context.get('driver_app_parent_company_id')
+            if company_id:
+                try:
+                    company = self.env['res.company'].browse(int(company_id)).exists()
+                except (TypeError, ValueError):
+                    company = self.env['res.company']
+        if not company:
+            company = self.env.user.company_id
+        if company and hasattr(company, '_driver_app_local_now'):
+            return company._driver_app_local_now().strftime('%H:%M:%S')
+        return fields.Datetime.context_timestamp(
+            self, fields.Datetime.from_string(fields.Datetime.now())
+        ).strftime('%H:%M:%S')
 
     @api.model
     def _manual_driver_defaults(self, batch):
@@ -1427,6 +1473,56 @@ class StoreDriverRequestLine(models.Model):
         for rec in self:
             rec.source_path_ids = [(6, 0, rec._manual_allowed_sources().ids)]
 
+    @api.depends(
+        'source_path_id',
+        'destination_path_id',
+        'pricing_line_id',
+        'batch_id.company_id'
+    )
+    def _compute_manual_destination_pricing_line_id(self):
+        PricingLine = self.env['trnsp.store.pricing.lines'].sudo()
+        for rec in self:
+            candidate = rec.pricing_line_id
+            if (
+                candidate
+                and candidate.header_id.source_path_id == rec.source_path_id
+                and candidate.destination_path_id == rec.destination_path_id
+            ):
+                rec.manual_destination_pricing_line_id = candidate
+                continue
+
+            candidate = PricingLine.browse([])
+            if rec.source_path_id and rec.destination_path_id:
+                domain = [
+                    ('header_id.source_path_id', '=', rec.source_path_id.id),
+                    ('destination_path_id', '=', rec.destination_path_id.id),
+                ]
+                _driver, company = rec._manual_filter_driver_company()
+                if company and 'company_id' in self.env['trnsp.store.pricing']._fields:
+                    domain += [
+                        '|',
+                        ('header_id.company_id', '=', False),
+                        ('header_id.company_id', '=', company.id),
+                    ]
+                candidate = PricingLine.search(domain, limit=1)
+            rec.manual_destination_pricing_line_id = candidate
+
+    def _inverse_manual_destination_pricing_line_id(self):
+        for rec in self:
+            line = rec.manual_destination_pricing_line_id
+            if line:
+                rec.destination_path_id = line.destination_path_id
+                rec.pricing_line_id = line
+
+    @api.onchange('manual_destination_pricing_line_id')
+    def _onchange_manual_destination_pricing_line_id(self):
+        for rec in self:
+            line = rec.manual_destination_pricing_line_id
+            rec.destination_path_id = line.destination_path_id if line else False
+            rec.pricing_line_id = line or False
+            rec._load_destination_gps()
+            rec._calculate_gps()
+
     @api.depends('source_path_id', 'batch_id.driver_id', 'batch_id.company_id')
     def _compute_destination_path_ids(self):
         for rec in self:
@@ -1436,6 +1532,7 @@ class StoreDriverRequestLine(models.Model):
     @api.onchange('source_path_id')
     def _onchange_source_path_id(self):
         self.destination_path_id = False
+        self.manual_destination_pricing_line_id = False
         self.pricing_line_id = False
         self.destination_latitude = 0.0
         self.destination_longitude = 0.0
@@ -1479,9 +1576,11 @@ class StoreDriverRequestLine(models.Model):
             if self.source_path_id != car_source:
                 self.source_path_id = car_source
                 self.destination_path_id = False
+                self.manual_destination_pricing_line_id = False
         elif self.source_path_id and self.source_path_id not in allowed_sources:
             self.source_path_id = False
             self.destination_path_id = False
+            self.manual_destination_pricing_line_id = False
 
         destination_ids = self._manual_allowed_destinations(self.source_path_id).ids
         self.destination_path_ids = [(6, 0, destination_ids)]
@@ -1705,6 +1804,11 @@ class StoreDriverRequestLine(models.Model):
         batch = self.env['trnsp.store.driver.request.batch'].browse(
             vals.get('batch_id')
         )
+
+        if not vals.get('request_time'):
+            vals['request_time'] = self._manual_current_time_value(
+                batch if batch and batch.exists() else None
+            )
 
         if batch and batch.exists():
             defaults = self._manual_driver_defaults(batch)
