@@ -64,26 +64,16 @@ class DriverAppDeliveryAPI(http.Controller):
 
     @classmethod
     def _serialize_delivery_detail_line(cls, line):
-        """Lightweight mobile month-detail payload; intentionally excludes images/binary fields."""
+        """Diagnostic minimal payload for month details.
+
+        Keep this endpoint intentionally tiny to isolate transport/body-size issues.
+        No images, binary data, GPS coordinates, notes, names, or relational payloads.
+        """
         return {
             'id': line.id,
-            'mobile_uuid': line.mobile_uuid or '',
             'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
             'request_time': line.request_time or '',
-            'car': cls._many2one_value(line.product_car_id),
-            'source': cls._many2one_value(line.source_path_id),
-            'destination': cls._many2one_value(line.destination_path_id),
-            'driver_latitude': line.driver_latitude,
-            'driver_longitude': line.driver_longitude,
-            'destination_latitude': line.destination_latitude,
-            'destination_longitude': line.destination_longitude,
-            'allowed_radius': line.allowed_radius,
-            'gps_distance': line.gps_distance,
-            'gps_valid': bool(line.gps_valid),
-            'review_state': line.review_state,
-            'reject_reason': line.reject_reason or '',
-            'notes': line.notes or '',
-            'transferred': bool(line.transferred),
+            'review_state': line.review_state or 'pending',
         }
 
     @staticmethod
