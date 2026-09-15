@@ -64,16 +64,39 @@ class DriverAppDeliveryAPI(http.Controller):
 
     @classmethod
     def _serialize_delivery_detail_line(cls, line):
-        """Diagnostic minimal payload for month details.
-
-        Keep this endpoint intentionally tiny to isolate transport/body-size issues.
-        No images, binary data, GPS coordinates, notes, names, or relational payloads.
-        """
+        """Lightweight month-list row. Never access binary/image fields."""
         return {
             'id': line.id,
             'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
             'request_time': line.request_time or '',
+            'car': cls._many2one_value(line.product_car_id),
+            'source': cls._many2one_value(line.source_path_id),
+            'destination': cls._many2one_value(line.destination_path_id),
             'review_state': line.review_state or 'pending',
+        }
+
+    @classmethod
+    def _serialize_delivery_detail(cls, line):
+        """Full detail for one delivery, intentionally excluding all binary/image fields."""
+        return {
+            'id': line.id,
+            'mobile_uuid': line.mobile_uuid or '',
+            'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
+            'request_time': line.request_time or '',
+            'car': cls._many2one_value(line.product_car_id),
+            'source': cls._many2one_value(line.source_path_id),
+            'destination': cls._many2one_value(line.destination_path_id),
+            'driver_latitude': line.driver_latitude,
+            'driver_longitude': line.driver_longitude,
+            'destination_latitude': line.destination_latitude,
+            'destination_longitude': line.destination_longitude,
+            'allowed_radius': line.allowed_radius,
+            'gps_distance': line.gps_distance,
+            'gps_valid': bool(line.gps_valid),
+            'review_state': line.review_state or 'pending',
+            'reject_reason': line.reject_reason or '',
+            'notes': line.notes or '',
+            'transferred': bool(line.transferred),
         }
 
     @staticmethod
@@ -954,7 +977,7 @@ class DriverAppDeliveryAPI(http.Controller):
         type='http', auth='public', methods=['GET'], csrf=False
     )
     def delivery_details(
-        self, month=None, year=None, page=1, limit=50,
+        self, month=None, year=None, page=1, limit=20,
         review_state=None, gps_status=None, request_date=None, **kwargs
     ):
         """Independent lightweight month-detail API for the mobile app.
@@ -974,10 +997,10 @@ class DriverAppDeliveryAPI(http.Controller):
             return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
         try:
             page = max(1, int(page or 1))
-            limit = int(limit or 50)
+            limit = int(limit or 20)
         except (TypeError, ValueError):
             return error('INVALID_PAGING', 'قيم الاسترجاع غير صحيحة.')
-        limit = max(10, min(limit, 200))
+        limit = max(1, min(limit, 50))
 
         batch = request.env['trnsp.store.driver.request.batch'].sudo().search([
             ('driver_id', '=', driver.id),
@@ -1040,6 +1063,27 @@ class DriverAppDeliveryAPI(http.Controller):
             'has_more': offset + returned < total_count,
             'lines': [self._serialize_delivery_detail_line(line) for line in lines],
         })
+
+    @http.route(
+        '/api/driver/v1/delivery-details/<int:delivery_id>',
+        type='http', auth='public', methods=['GET'], csrf=False
+    )
+    def delivery_detail(self, delivery_id, **kwargs):
+        """Return one authenticated driver's delivery without image/binary content."""
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, session = auth
+
+        line = request.env['trnsp.store.driver.request.line'].sudo().search([
+            ('id', '=', delivery_id),
+            ('batch_id.driver_id', '=', driver.id),
+            ('batch_id.company_id', '=', driver.company_id.id),
+        ], limit=1)
+        if not line:
+            return error('DELIVERY_NOT_FOUND', 'التوصيلة غير موجودة أو غير متاحة.')
+
+        return ok(self._serialize_delivery_detail(line))
 
     @http.route(
         '/api/driver/v1/current-batch',
