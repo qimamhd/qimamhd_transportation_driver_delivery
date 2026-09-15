@@ -62,6 +62,30 @@ class DriverAppDeliveryAPI(http.Controller):
             'transferred': bool(line.transferred),
         }
 
+    @classmethod
+    def _serialize_delivery_detail_line(cls, line):
+        """Lightweight mobile month-detail payload; intentionally excludes images/binary fields."""
+        return {
+            'id': line.id,
+            'mobile_uuid': line.mobile_uuid or '',
+            'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
+            'request_time': line.request_time or '',
+            'car': cls._many2one_value(line.product_car_id),
+            'source': cls._many2one_value(line.source_path_id),
+            'destination': cls._many2one_value(line.destination_path_id),
+            'driver_latitude': line.driver_latitude,
+            'driver_longitude': line.driver_longitude,
+            'destination_latitude': line.destination_latitude,
+            'destination_longitude': line.destination_longitude,
+            'allowed_radius': line.allowed_radius,
+            'gps_distance': line.gps_distance,
+            'gps_valid': bool(line.gps_valid),
+            'review_state': line.review_state,
+            'reject_reason': line.reject_reason or '',
+            'notes': line.notes or '',
+            'transferred': bool(line.transferred),
+        }
+
     @staticmethod
     def _normalize_and_validate_time(value):
         """Return normalized HH:MM[:SS] or False when the value is invalid."""
@@ -933,6 +957,98 @@ class DriverAppDeliveryAPI(http.Controller):
             'returned_count': returned,
             'has_more': offset + returned < total_count,
             'lines': [self._serialize_batch_line(line) for line in lines],
+        })
+
+    @http.route(
+        '/api/driver/v1/delivery-details',
+        type='http', auth='public', methods=['GET'], csrf=False
+    )
+    def delivery_details(
+        self, month=None, year=None, page=1, limit=50,
+        review_state=None, gps_status=None, request_date=None, **kwargs
+    ):
+        """Independent lightweight month-detail API for the mobile app.
+
+        This route deliberately does not read or return trip-sheet images or any
+        other binary field. The legacy delivery-lines route remains untouched for
+        backward compatibility with already deployed clients.
+        """
+        auth, response = authenticate_driver()
+        if response:
+            return response
+        driver, session = auth
+
+        today = fields.Date.today()
+        month, year = self._validate_period(month or today.month, year or today.year)
+        if not month:
+            return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
+        try:
+            page = max(1, int(page or 1))
+            limit = int(limit or 50)
+        except (TypeError, ValueError):
+            return error('INVALID_PAGING', 'قيم الاسترجاع غير صحيحة.')
+        limit = max(10, min(limit, 200))
+
+        batch = request.env['trnsp.store.driver.request.batch'].sudo().search([
+            ('driver_id', '=', driver.id),
+            ('month_name', '=', '%02d' % month),
+            ('year', '=', year),
+            ('company_id', '=', driver.company_id.id),
+        ], limit=1)
+        if not batch:
+            return ok({
+                'month': month, 'year': year, 'state': None,
+                'page': page, 'limit': limit, 'total_count': 0,
+                'returned_count': 0, 'has_more': False, 'lines': [],
+            }, message='لا يوجد ملف لهذا الشهر.')
+
+        domain = [('batch_id', '=', batch.id)]
+        if review_state not in (None, '', 'all'):
+            if review_state not in {'pending', 'accepted', 'rejected'}:
+                return error('INVALID_REVIEW_STATE', 'حالة المراجعة غير صحيحة.')
+            domain.append(('review_state', '=', review_state))
+
+        if gps_status not in (None, '', 'all'):
+            if gps_status == 'inside':
+                domain.append(('gps_valid', '=', True))
+            elif gps_status == 'outside':
+                domain.append(('gps_valid', '=', False))
+            else:
+                return error('INVALID_GPS_STATUS', 'فلتر GPS غير صحيح.')
+
+        if request_date not in (None, ''):
+            try:
+                filter_date = fields.Date.from_string(request_date)
+            except (TypeError, ValueError):
+                filter_date = False
+            if not filter_date:
+                return error('INVALID_DATE', 'التاريخ غير صحيح. استخدم YYYY-MM-DD.')
+            if filter_date.month != month or filter_date.year != year:
+                return error('DATE_OUTSIDE_PERIOD', 'تاريخ الفلتر لا ينتمي إلى الشهر المحدد.')
+            domain.append(('request_date', '=', filter_date))
+
+        Line = request.env['trnsp.store.driver.request.line'].sudo()
+        total_count = Line.search_count(domain)
+        offset = (page - 1) * limit
+        lines = Line.search(
+            domain,
+            order='request_date desc, request_time desc, id desc',
+            limit=limit,
+            offset=offset,
+        )
+        returned = len(lines)
+        return ok({
+            'batch_id': batch.id,
+            'batch_name': batch.name,
+            'month': month,
+            'year': year,
+            'state': batch.state,
+            'page': page,
+            'limit': limit,
+            'total_count': total_count,
+            'returned_count': returned,
+            'has_more': offset + returned < total_count,
+            'lines': [self._serialize_delivery_detail_line(line) for line in lines],
         })
 
     @http.route(
