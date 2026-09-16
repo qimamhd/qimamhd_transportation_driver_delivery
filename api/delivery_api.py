@@ -978,7 +978,7 @@ class DriverAppDeliveryAPI(http.Controller):
     )
     def delivery_details(
         self, month=None, year=None, page=1, limit=20,
-        review_state=None, gps_status=None, request_date=None, **kwargs
+        review_state=None, review_states=None, gps_status=None, request_date=None, **kwargs
     ):
         """Independent lightweight month-detail API for the mobile app.
 
@@ -1016,10 +1016,24 @@ class DriverAppDeliveryAPI(http.Controller):
             }, message='لا يوجد ملف لهذا الشهر.')
 
         domain = [('batch_id', '=', batch.id)]
-        if review_state not in (None, '', 'all'):
-            if review_state not in {'pending', 'accepted', 'rejected'}:
+        valid_review_states = {'pending', 'accepted', 'rejected'}
+        # New clients may select more than one review state. Keep the legacy
+        # single review_state parameter fully compatible with deployed clients.
+        selected_review_states = []
+        if review_states not in (None, '', 'all'):
+            selected_review_states = [
+                value.strip() for value in str(review_states).split(',')
+                if value.strip()
+            ]
+            if (not selected_review_states or
+                    any(value not in valid_review_states for value in selected_review_states)):
                 return error('INVALID_REVIEW_STATE', 'حالة المراجعة غير صحيحة.')
-            domain.append(('review_state', '=', review_state))
+        elif review_state not in (None, '', 'all'):
+            if review_state not in valid_review_states:
+                return error('INVALID_REVIEW_STATE', 'حالة المراجعة غير صحيحة.')
+            selected_review_states = [review_state]
+        if selected_review_states:
+            domain.append(('review_state', 'in', selected_review_states))
 
         if gps_status not in (None, '', 'all'):
             if gps_status == 'inside':

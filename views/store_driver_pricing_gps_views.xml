@@ -24,6 +24,10 @@
                        position="after">
                     <field name="gps_radius"
                            string="مجال GPS (متر)"/>
+                    <button name="action_open_destination_google_maps"
+                            type="object"
+                            string="فتح الموقع"
+                            icon="fa-map-marker"/>
                 </xpath>
 
             </field>

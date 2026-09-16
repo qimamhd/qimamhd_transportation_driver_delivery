@@ -25,6 +25,20 @@ class TrnspStorePricingLines(models.Model):
         help='أقصى مسافة مسموحة بين موقع السائق وموقع الوجهة عند تسجيل التوصيلة.'
     )
 
+    def action_open_destination_google_maps(self):
+        self.ensure_one()
+        latitude = float(self.gbs_from or 0.0)
+        longitude = float(self.gbs_to or 0.0)
+        if not latitude or not longitude:
+            raise ValidationError(_('لا توجد إحداثيات محفوظة لهذه الوجهة.'))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': 'https://www.google.com/maps/search/?api=1&query=%.7f,%.7f' % (
+                latitude, longitude,
+            ),
+            'target': 'new',
+        }
+
     @api.constrains('gps_radius')
     def _check_gps_radius(self):
         for rec in self:
