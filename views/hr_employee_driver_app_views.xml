@@ -34,6 +34,7 @@
                                            password="True"
                                            placeholder="6 أحرف أو أكثر"/>
                                     <field name="biometric_allowed"/>
+                                    <field name="app_destination_check_enabled"/>
                                 </group>
 
                                 <group string="حالة حساب التطبيق">

@@ -46,6 +46,7 @@ class DriverAppDirectDeliveryAPI(http.Controller):
             'destination_locked': True,
             'radius_source': 'destination',
             'max_gps_accuracy': get_max_gps_accuracy(driver),
+            'destination_check_enabled': bool(driver.app_destination_check_enabled),
         })
 
     @http.route(

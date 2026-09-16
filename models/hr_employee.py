@@ -33,6 +33,14 @@ class HrEmployeeDriverApp(models.Model):
         track_visibility='onchange'
     )
 
+    app_destination_check_enabled = fields.Boolean(
+        string='إظهار التحقق من الوجهة',
+        default=False,
+        copy=False,
+        track_visibility='onchange',
+        help='يظهر للسائق زر التحقق من الوجهة لعرض وجهات مصدره وموقعها في Google Maps فقط، دون تغيير الوجهة أو تجاوز تحقق GPS.'
+    )
+
     # Legacy field kept for database compatibility only.
     # Driver-app authentication now uses hr.employee.identification_id.
     app_login = fields.Char(
