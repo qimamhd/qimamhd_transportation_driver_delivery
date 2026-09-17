@@ -376,7 +376,9 @@ class DriverAppDeliveryAPI(http.Controller):
             return response
         driver, session = auth
         driver.company_id.sudo()._driver_app_auto_close_previous()
-        return ok(driver.company_id.sudo()._driver_app_policy_payload())
+        payload = driver.company_id.sudo()._driver_app_policy_payload()
+        payload['monthly_close_enabled'] = bool(driver.sudo().app_monthly_close_enabled)
+        return ok(payload)
 
     @http.route(
         '/api/driver/v1/deliveries',

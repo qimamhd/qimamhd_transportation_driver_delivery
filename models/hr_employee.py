@@ -41,6 +41,14 @@ class HrEmployeeDriverApp(models.Model):
         help='يظهر للسائق زر التحقق من الوجهة لعرض وجهات مصدره وموقعها في Google Maps فقط، دون تغيير الوجهة أو تجاوز تحقق GPS.'
     )
 
+    app_monthly_close_enabled = fields.Boolean(
+        string='إظهار زر الأقفال',
+        default=False,
+        copy=False,
+        track_visibility='onchange',
+        help='يتحكم فقط في ظهور زر الأقفال في الصفحة الرئيسية لتطبيق السائق. الإعداد مخفي افتراضيًا.'
+    )
+
     # Legacy field kept for database compatibility only.
     # Driver-app authentication now uses hr.employee.identification_id.
     app_login = fields.Char(
@@ -208,6 +216,7 @@ class HrEmployeeDriverApp(models.Model):
             'new_app_pin',
             'new_app_password',
             'biometric_allowed',
+            'app_monthly_close_enabled',
             'app_pin_hash',
             'app_password_hash',
         }
@@ -227,6 +236,7 @@ class HrEmployeeDriverApp(models.Model):
                 'new_app_password',
                 'app_access_enabled',
                 'biometric_allowed',
+                'app_monthly_close_enabled',
             )
         )
         # identification_id is an HR employee field, so normal HR permissions
