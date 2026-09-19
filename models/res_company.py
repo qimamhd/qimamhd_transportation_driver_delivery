@@ -71,11 +71,30 @@ class ResCompany(models.Model):
         help='أقصى قيمة Accuracy يقبلها التطبيق وAPI في نقاط التحقق الحرجة. كلما قل الرقم كانت الدقة المطلوبة أعلى. يبقى فحص نطاق الوجهة مستقلاً ويستخدم المسافة + دقة GPS.'
     )
 
+    driver_app_inactivity_lock_enabled = fields.Boolean(
+        string='قفل التطبيق عند عدم النشاط',
+        default=True,
+        help='يقفل واجهة تطبيق السائق بعد مدة عدم النشاط المحددة، بدون تسجيل خروج أو إلغاء جلسة السائق.'
+    )
+
+    driver_app_inactivity_timeout_minutes = fields.Integer(
+        string='مدة عدم النشاط قبل القفل (دقائق)',
+        default=5,
+        help='عدد دقائق عدم التفاعل داخل التطبيق قبل إظهار قفل التطبيق. لا تشمل مدة بقاء التطبيق في الخلفية.'
+    )
+
     @api.constrains('driver_app_max_gps_accuracy')
     def _check_driver_app_max_gps_accuracy(self):
         for company in self:
             if company.driver_app_max_gps_accuracy <= 0:
                 raise ValidationError('أقصى دقة GPS يجب أن تكون أكبر من صفر متر.')
+
+    @api.constrains('driver_app_inactivity_lock_enabled', 'driver_app_inactivity_timeout_minutes')
+    def _check_driver_app_inactivity_timeout(self):
+        for company in self:
+            if (company.driver_app_inactivity_lock_enabled and
+                    company.driver_app_inactivity_timeout_minutes <= 0):
+                raise ValidationError('مدة عدم النشاط قبل قفل التطبيق يجب أن تكون أكبر من صفر دقيقة.')
 
     def _driver_app_timezone(self):
         self.ensure_one()
@@ -105,6 +124,8 @@ class ResCompany(models.Model):
             'trip_sheet_required': bool(self.driver_app_trip_sheet_required),
             'single_device_enabled': bool(self.driver_app_single_device),
             'route_trip_enabled': bool(self.driver_app_enable_route_trip),
+            'inactivity_lock_enabled': bool(self.driver_app_inactivity_lock_enabled),
+            'inactivity_timeout_minutes': max(1, int(self.driver_app_inactivity_timeout_minutes or 5)),
             'max_gps_accuracy_meters': max(1.0, float(self.driver_app_max_gps_accuracy or 20.0)),
             'server_datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
             'server_date': now.strftime('%Y-%m-%d'),

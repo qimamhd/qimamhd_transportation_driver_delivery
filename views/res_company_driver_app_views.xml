@@ -22,6 +22,11 @@
                             <field name="driver_app_period_policy"/>
                             <field name="driver_app_auto_close_previous_months"/>
                         </group>
+                        <group string="أمان التطبيق">
+                            <field name="driver_app_inactivity_lock_enabled"/>
+                            <field name="driver_app_inactivity_timeout_minutes"
+                                   attrs="{'invisible': [('driver_app_inactivity_lock_enabled', '=', False)], 'required': [('driver_app_inactivity_lock_enabled', '=', True)]}"/>
+                        </group>
                     </group>
                     <separator string="الإعداد الافتراضي الموصى به"/>
                     <div class="alert alert-info" role="alert">
