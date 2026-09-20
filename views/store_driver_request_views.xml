@@ -174,9 +174,9 @@
                                         <field name="trip_sheet_image_name" invisible="1"/>
                                         <field name="trip_sheet_image" invisible="1"/>
                                         <button name="action_view_trip_sheet_image"
-                                                string="عرض"
-                                                icon="fa-eye"
+                                                string="فتح الصورة"
                                                 type="object"
+                                                class="btn-secondary"
                                                 attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
@@ -294,6 +294,8 @@
             <field name="res_model">trnsp.store.driver.request.batch</field>
             <field name="view_mode">tree,form</field>
             <field name="search_view_id" ref="trnsp_store_driver_request_batch_search"/>
+            <!-- Fully rejected batches are final and intentionally hidden from the main tree. -->
+            <field name="domain">[('state','!=','rejected')]</field>
             <field name="context">{'search_default_filter_not_transferred': 1}</field>
         </record>
 
