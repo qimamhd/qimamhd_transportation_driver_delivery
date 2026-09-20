@@ -945,6 +945,12 @@ class StoreDriverRequestLine(models.Model):
         sanitize=False,
         readonly=True
     )
+    trip_sheet_preview_html = fields.Html(
+        string='معاينة شيت الرحلة',
+        compute='_compute_trip_sheet_preview_html',
+        sanitize=False,
+        readonly=True
+    )
     server_received_at = fields.Datetime(
         string='وقت وصول الطلب للسيرفر',
         default=fields.Datetime.now,
@@ -1118,30 +1124,50 @@ class StoreDriverRequestLine(models.Model):
 
     @api.depends('trip_sheet_image')
     def _compute_trip_sheet_view_html(self):
+        # Kept for backward compatibility with existing views/customizations.
+        # Do not expose a direct /web/content download link anymore.
         for rec in self:
             if rec.trip_sheet_image and rec.id:
-                url = '/web/content?model=%s&amp;id=%s&amp;field=trip_sheet_image&amp;filename_field=trip_sheet_image_name&amp;download=true' % (
-                    rec._name, rec.id
-                )
-                rec.trip_sheet_view_html = (
-                    '<a href="%s" class="btn btn-sm btn-primary" '
-                    'onclick="event.stopPropagation();" '
-                    'style="padding:2px 10px; min-width:54px;">تنزيل</a>' % url
-                )
+                rec.trip_sheet_view_html = '<span class="text-info">متاح للعرض</span>'
             else:
                 rec.trip_sheet_view_html = '<span class="text-muted">—</span>'
 
+    @api.depends('trip_sheet_image')
+    def _compute_trip_sheet_preview_html(self):
+        for rec in self:
+            if rec.trip_sheet_image and rec.id:
+                image_url = '/web/image?model=%s&amp;id=%s&amp;field=trip_sheet_image' % (
+                    rec._name, rec.id
+                )
+                rec.trip_sheet_preview_html = (
+                    '<div style="text-align:center; padding:8px;">'
+                    '<img src="%s" alt="شيت الرحلة" '
+                    'style="display:block; max-width:100%%; max-height:70vh; width:auto; height:auto; margin:0 auto; object-fit:contain;"/>'
+                    '</div>' % image_url
+                )
+            else:
+                rec.trip_sheet_preview_html = (
+                    '<div class="text-muted" style="text-align:center; padding:24px;">'
+                    'لا توجد صورة مرفقة لهذه التوصيلة.'
+                    '</div>'
+                )
+
     def action_view_trip_sheet_image(self):
-        """Download the stored trip-sheet image without opening the delivery-line popup."""
+        """Open the trip-sheet image inline in an Odoo modal; never download it."""
         self.ensure_one()
         if not self.trip_sheet_image:
-            return False
+            raise ValidationError(_('لا توجد صورة شيت رحلة مرفقة لهذه التوصيلة.'))
         return {
-            'type': 'ir.actions.act_url',
-            'url': '/web/content?model=%s&id=%s&field=trip_sheet_image&filename_field=trip_sheet_image_name&download=true' % (
-                self._name, self.id,
-            ),
-            'target': 'self',
+            'name': _('معاينة شيت الرحلة'),
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'views': [(self.env.ref(
+                'qimamhd_transportation_driver_delivery.trnsp_store_driver_request_line_trip_sheet_preview_form'
+            ).id, 'form')],
+            'target': 'new',
+            'context': dict(self.env.context, create=False, edit=False),
         }
 
     def action_accept_line(self):

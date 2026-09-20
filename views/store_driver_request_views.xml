@@ -173,7 +173,11 @@
                                                 attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','pending')]}"/>
                                         <field name="trip_sheet_image_name" invisible="1"/>
                                         <field name="trip_sheet_image" invisible="1"/>
-                                        <field name="trip_sheet_view_html" string="شيت الرحلة" widget="html" readonly="1"/>
+                                        <button name="action_view_trip_sheet_image"
+                                                string="عرض"
+                                                icon="fa-eye"
+                                                type="object"
+                                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"
@@ -201,6 +205,25 @@
                         <field name="message_ids" widget="mail_thread"/>
                     </div>
 
+                </form>
+            </field>
+        </record>
+
+        <!-- Read-only inline image preview. No /web/content download action is exposed. -->
+        <record id="trnsp_store_driver_request_line_trip_sheet_preview_form" model="ir.ui.view">
+            <field name="name">trnsp.store.driver.request.line.trip.sheet.preview.form</field>
+            <field name="model">trnsp.store.driver.request.line</field>
+            <field name="arch" type="xml">
+                <form string="معاينة شيت الرحلة" create="false" edit="false" delete="false">
+                    <sheet>
+                        <group>
+                            <field name="trip_sheet_image_name" string="اسم المرفق" readonly="1"/>
+                        </group>
+                        <field name="trip_sheet_preview_html" widget="html" readonly="1" nolabel="1"/>
+                    </sheet>
+                    <footer>
+                        <button string="إغلاق" special="cancel" class="btn-primary"/>
+                    </footer>
                 </form>
             </field>
         </record>
