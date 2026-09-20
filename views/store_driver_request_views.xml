@@ -61,17 +61,17 @@
                                 string="إعادة فتح"
                                 type="object"
                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','not in',['done','review','approved'])]}"/>
+                                attrs="{'invisible':[('state','not in',['done','review','approved','rejected'])]}"/>
 
                         <button name="action_cancel"
                                 string="إلغاء"
                                 type="object"
                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','in',['cancel','transferred'])]}"/>
+                                attrs="{'invisible':[('state','in',['cancel','rejected','transferred'])]}"/>
 
                         <field name="state"
                                widget="statusbar"
-                               statusbar_visible="draft,done,review,approved,transferred"/>
+                               statusbar_visible="draft,done,review,approved,rejected,transferred"/>
                     </header>
 
                     <sheet>
@@ -148,29 +148,29 @@
                                         <field name="gps_exception_approved" string="قبول استثنائي" readonly="1"/>
                                         <field name="review_state" readonly="1"/>
                                         <field name="reject_reason"
-                                               attrs="{'readonly':[('parent.state','in',['approved','transferred','cancel'])], 'invisible':[('review_state','!=','rejected')]}"/>
+                                               attrs="{'readonly':[('parent.state','in',['approved','rejected','transferred','cancel'])], 'invisible':[('review_state','!=','rejected')]}"/>
                                         <button name="action_accept_line"
                                                 string="قبول"
                                                 type="object"
                                                 class="oe_highlight"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','transferred','cancel']),('review_state','!=','pending')]}"/>
+                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
                                         <button name="action_open_exception_accept"
                                                 string="قبول استثنائي"
                                                 type="object"
                                                 class="oe_highlight"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','transferred','cancel']),('review_state','!=','pending')]}"/>
+                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
                                         <button name="action_reject_line"
                                                 string="رفض"
                                                 type="object"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','transferred','cancel']),('review_state','!=','pending')]}"/>
+                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
                                         <button name="action_reset_review_line"
                                                 string="إعادة للمراجعة"
                                                 type="object"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','transferred','cancel']),('review_state','=','pending')]}"/>
+                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','=','pending')]}"/>
                                         <field name="trip_sheet_image_name" invisible="1"/>
                                         <field name="trip_sheet_image" invisible="1"/>
                                         <button name="action_view_trip_sheet_image"
@@ -235,7 +235,7 @@
                 <tree default_order="year desc, month_name desc, id desc"
                       decoration-info="state == 'review'"
                       decoration-success="state == 'approved'"
-                      decoration-danger="state == 'cancel'">
+                      decoration-danger="state in ('rejected', 'cancel')">
                     <field name="name"/>
                     <field name="driver_id"/>
                     <field name="month_name"/>

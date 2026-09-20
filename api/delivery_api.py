@@ -735,7 +735,7 @@ class DriverAppDeliveryAPI(http.Controller):
                 return error('INVALID_PERIOD', 'السنة غير صحيحة.')
             domain.append(('year', '=', year_value))
 
-        valid_states = {'draft', 'done', 'review', 'approved', 'transferred', 'cancel'}
+        valid_states = {'draft', 'done', 'review', 'approved', 'rejected', 'transferred', 'cancel'}
         if state not in (None, ''):
             if state not in valid_states:
                 return error('INVALID_STATE', 'حالة الفترة غير صحيحة.')
@@ -1193,7 +1193,7 @@ class DriverAppDeliveryAPI(http.Controller):
         ], limit=1)
         if not batch:
             return error('BATCH_NOT_FOUND', 'لا يوجد ملف لهذا الشهر.', status=404)
-        if batch.state in ('done', 'review', 'approved', 'transferred'):
+        if batch.state in ('done', 'review', 'approved', 'rejected', 'transferred'):
             return ok({
                 'batch_id': batch.id,
                 'batch_name': batch.name,

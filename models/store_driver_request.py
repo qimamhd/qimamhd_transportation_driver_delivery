@@ -299,6 +299,7 @@ class StoreDriverRequestBatch(models.Model):
         ('done', 'مكتمل من السائق'),
         ('review', 'قيد المراجعة'),
         ('approved', 'معتمد'),
+        ('rejected', 'مرفوض بالكامل'),
         ('transferred', 'تم التحويل للحسبة'),
         ('cancel', 'ملغي'),
     ], string='الحالة',
@@ -506,13 +507,32 @@ class StoreDriverRequestBatch(models.Model):
                     _('يوجد %s توصيلة لم تتم مراجعتها بعد.') % len(pending)
                 )
 
+            # A rejected delivery must always have a reason before the review
+            # can be closed, whether the batch also contains accepted lines or
+            # every delivery was rejected.
+            rejected_without_reason = rec.request_lines.filtered(
+                lambda x: x.review_state == 'rejected'
+                and not (x.reject_reason or '').strip()
+            )
+            if rejected_without_reason:
+                raise ValidationError(
+                    _('يجب إدخال سبب الرفض لجميع التوصيلات المرفوضة.')
+                )
+
             accepted = rec.request_lines.filtered(
                 lambda x: x.review_state == 'accepted'
             )
             if not accepted:
-                raise ValidationError(
-                    _('لا توجد أي توصيلة مقبولة لاعتماد الطلب.')
-                )
+                # All lines have already been reviewed (pending was checked
+                # above), so a batch with no accepted lines is a legitimate
+                # fully-rejected review result. Close it explicitly instead of
+                # leaving it stuck in review or pretending it was approved.
+                rec.write({
+                    'state': 'rejected',
+                    'approve_user_id': self.env.user.id,
+                    'approve_date': fields.Datetime.now(),
+                })
+                continue
 
             invalid_accepted = accepted.filtered(
                 lambda x: not x.gps_valid and not x.gps_exception_approved
@@ -523,15 +543,6 @@ class StoreDriverRequestBatch(models.Model):
                         'لا يمكن اعتماد الملف لأن %s توصيلة مقبولة '
                         'خارج نطاق GPS أو بدون إعداد GPS.'
                     ) % len(invalid_accepted)
-                )
-
-            rejected_without_reason = rec.request_lines.filtered(
-                lambda x: x.review_state == 'rejected'
-                and not x.reject_reason
-            )
-            if rejected_without_reason:
-                raise ValidationError(
-                    _('يجب إدخال سبب الرفض لجميع التوصيلات المرفوضة.')
                 )
 
             rec.write({
@@ -832,7 +843,7 @@ class StoreDriverRequestBatch(models.Model):
     def action_reopen(self):
         self._check_manager()
         for rec in self:
-            if rec.state not in ('done', 'review', 'approved'):
+            if rec.state not in ('done', 'review', 'approved', 'rejected'):
                 raise ValidationError(
                     _('لا يمكن إعادة فتح الطلب في الحالة الحالية.')
                 )
@@ -1809,7 +1820,7 @@ class StoreDriverRequestLine(models.Model):
 
         if 'reject_reason' in vals and not self.env.context.get('driver_delivery_workflow_write'):
             for rec in self:
-                if rec.batch_id.state in ('approved', 'transferred', 'cancel'):
+                if rec.batch_id.state in ('approved', 'rejected', 'transferred', 'cancel'):
                     raise ValidationError(
                         _('لا يمكن تعديل سبب الرفض بعد اعتماد الملف أو إغلاقه.')
                     )
