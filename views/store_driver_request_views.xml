@@ -154,18 +154,18 @@
                                                 type="object"
                                                 class="oe_highlight"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|','|',('parent.state','!=','review'),('gps_valid','=',False),('review_state','=','accepted')]}"/>
+                                                attrs="{'invisible':[('parent.state','in',['approved','transferred','cancel'])]}"/>
                                         <button name="action_open_exception_accept"
                                                 string="قبول استثنائي"
                                                 type="object"
                                                 class="oe_highlight"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                                attrs="{'invisible':['|','|',('parent.state','!=','review'),('gps_valid','=',True),('review_state','=','accepted')]}"/>
+                                                attrs="{'invisible':[('parent.state','in',['approved','transferred','cancel'])]}"/>
                                         <button name="action_reject_line"
                                                 string="رفض"
                                                 type="object"
                                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','!=','review'),('review_state','=','rejected')]}"/>
+                                                attrs="{'invisible':[('parent.state','in',['approved','transferred','cancel'])]}"/>
                                         <button name="action_reset_review_line"
                                                 string="إعادة للمراجعة"
                                                 type="object"
