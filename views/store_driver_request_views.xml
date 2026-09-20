@@ -264,7 +264,7 @@
                     <field name="state"/>
 
                     <filter string="غير المحولة للحسابات" name="filter_not_transferred"
-                            domain="[('state','!=','transferred')]"/>
+                            domain="[('state','not in',['transferred','rejected'])]"/>
 
                     <filter string="مفتوحة" name="filter_draft"
                             domain="[('state','=','draft')]"/>
@@ -276,6 +276,8 @@
                             domain="[('state','=','approved')]"/>
                     <filter string="تم التحويل" name="filter_transferred"
                             domain="[('state','=','transferred')]"/>
+                    <filter string="مرفوض بالكامل" name="filter_rejected"
+                            domain="[('state','=','rejected')]"/>
 
                     <separator/>
 
@@ -294,8 +296,6 @@
             <field name="res_model">trnsp.store.driver.request.batch</field>
             <field name="view_mode">tree,form</field>
             <field name="search_view_id" ref="trnsp_store_driver_request_batch_search"/>
-            <!-- Fully rejected batches are final and intentionally hidden from the main tree. -->
-            <field name="domain">[('state','!=','rejected')]</field>
             <field name="context">{'search_default_filter_not_transferred': 1}</field>
         </record>
 
