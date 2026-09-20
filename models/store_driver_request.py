@@ -1099,8 +1099,8 @@ class StoreDriverRequestLine(models.Model):
     def action_open_exception_accept(self):
         self.ensure_one()
         self._check_manager_access()
-        if self.batch_id.state != 'review':
-            raise ValidationError(_('القبول الاستثنائي متاح فقط أثناء حالة قيد المراجعة.'))
+        if self.batch_id.state not in ('draft', 'done', 'review'):
+            raise ValidationError(_('القبول الاستثنائي متاح فقط قبل اعتماد الملف.'))
         if self.gps_valid:
             raise ValidationError(_('هذه التوصيلة داخل نطاق GPS؛ استخدم زر القبول العادي.'))
         if self.review_state == 'accepted' and self.gps_exception_approved:
@@ -1147,9 +1147,9 @@ class StoreDriverRequestLine(models.Model):
     def action_accept_line(self):
         self._check_reviewer_access()
         for rec in self:
-            if rec.batch_id.state != 'review':
+            if rec.batch_id.state not in ('draft', 'done', 'review'):
                 raise ValidationError(
-                    _('يمكن قبول التوصيلة فقط أثناء حالة قيد المراجعة.')
+                    _('يمكن قبول التوصيلة فقط قبل اعتماد الملف.')
                 )
             if not rec.gps_valid:
                 raise ValidationError(
@@ -1171,9 +1171,9 @@ class StoreDriverRequestLine(models.Model):
     def action_reject_line(self):
         self._check_reviewer_access()
         for rec in self:
-            if rec.batch_id.state != 'review':
+            if rec.batch_id.state not in ('draft', 'done', 'review'):
                 raise ValidationError(
-                    _('يمكن رفض التوصيلة فقط أثناء حالة قيد المراجعة.')
+                    _('يمكن رفض التوصيلة فقط قبل اعتماد الملف.')
                 )
             rec.with_context(driver_delivery_workflow_write=True).write({
                 'review_state': 'rejected',
@@ -1763,19 +1763,29 @@ class StoreDriverRequestLine(models.Model):
                         _('لا يمكن تعديل بيانات التوصيلة بعد بدء المراجعة.')
                     )
 
-        review_fields = {
-            'review_state', 'reject_reason',
+        # Workflow buttons are intentionally available in every pre-approval state.
+        # Keep protected review fields guarded, while allowing the rejection reason
+        # to be completed before approval after pressing Reject.
+        protected_review_fields = {
+            'review_state',
             'gps_exception_approved', 'gps_exception_reason',
             'gps_exception_user_id', 'gps_exception_date',
         }
         if (
-            review_fields.intersection(vals.keys())
+            protected_review_fields.intersection(vals.keys())
             and not self.env.context.get('driver_delivery_workflow_write')
         ):
             for rec in self:
                 if rec.batch_id.state != 'review':
                     raise ValidationError(
-                        _('نتيجة المراجعة وسبب الرفض يمكن تعديلهما فقط أثناء حالة قيد المراجعة.')
+                        _('نتيجة المراجعة يمكن تعديلها مباشرة فقط أثناء حالة قيد المراجعة.')
+                    )
+
+        if 'reject_reason' in vals and not self.env.context.get('driver_delivery_workflow_write'):
+            for rec in self:
+                if rec.batch_id.state in ('approved', 'transferred', 'cancel'):
+                    raise ValidationError(
+                        _('لا يمكن تعديل سبب الرفض بعد اعتماد الملف أو إغلاقه.')
                     )
 
         if 'admin_notes' in vals:

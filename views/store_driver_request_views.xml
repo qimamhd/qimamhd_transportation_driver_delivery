@@ -148,7 +148,7 @@
                                         <field name="gps_exception_approved" string="قبول استثنائي" readonly="1"/>
                                         <field name="review_state" readonly="1"/>
                                         <field name="reject_reason"
-                                               attrs="{'readonly':[('parent.state','!=','review')], 'invisible':[('review_state','!=','rejected')]}"/>
+                                               attrs="{'readonly':[('parent.state','in',['approved','transferred','cancel'])], 'invisible':[('review_state','!=','rejected')]}"/>
                                         <button name="action_accept_line"
                                                 string="قبول"
                                                 type="object"

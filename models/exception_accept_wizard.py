@@ -30,8 +30,8 @@ class DriverDeliveryExceptionAcceptWizard(models.TransientModel):
         line = self.line_id.exists()
         if not line:
             raise ValidationError(_('التوصيلة لم تعد موجودة.'))
-        if line.batch_id.state != 'review':
-            raise ValidationError(_('القبول الاستثنائي متاح فقط أثناء حالة قيد المراجعة.'))
+        if line.batch_id.state not in ('draft', 'done', 'review'):
+            raise ValidationError(_('القبول الاستثنائي متاح فقط قبل اعتماد الملف.'))
         if line.gps_valid:
             raise ValidationError(_('هذه التوصيلة داخل نطاق GPS؛ استخدم القبول العادي.'))
 
