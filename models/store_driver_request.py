@@ -1213,9 +1213,9 @@ class StoreDriverRequestLine(models.Model):
     def action_reset_review_line(self):
         self._check_reviewer_access()
         for rec in self:
-            if rec.batch_id.state != 'review':
+            if rec.batch_id.state not in ('draft', 'done', 'review'):
                 raise ValidationError(
-                    _('يمكن إعادة التوصيلة للمراجعة فقط أثناء حالة قيد المراجعة.')
+                    _('يمكن إعادة التوصيلة للمراجعة فقط قبل اعتماد الملف.')
                 )
             rec.with_context(driver_delivery_workflow_write=True).write({
                 'review_state': 'pending',
