@@ -296,6 +296,11 @@
             <field name="res_model">trnsp.store.driver.request.batch</field>
             <field name="view_mode">tree,form</field>
             <field name="search_view_id" ref="trnsp_store_driver_request_batch_search"/>
+            <!-- Explicitly clear any domain stored by older module versions.
+                 v13.0.4.10.22 temporarily put the rejected state in the action
+                 domain; simply omitting the field on a later upgrade does not
+                 clear the existing ir.actions.act_window.domain value. -->
+            <field name="domain" eval="[]"/>
             <field name="context">{'search_default_filter_not_transferred': 1}</field>
         </record>
 
