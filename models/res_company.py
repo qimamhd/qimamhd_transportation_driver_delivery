@@ -65,6 +65,12 @@ class ResCompany(models.Model):
         help='عند التفعيل يرتبط حساب السائق بأول جهاز يسجل الدخول بنجاح، ويُرفض تسجيل الدخول من أي جهاز آخر حتى يفك المسؤول ارتباط الجهاز. الإعداد معطل افتراضيًا للحفاظ على توافق النسخ الحالية أثناء الترقية، ويمكن تفعيله بعد تحديث التطبيق.'
     )
 
+    driver_app_mock_gps_protection = fields.Boolean(
+        string='التحقق من الموقع الوهمي (Mock GPS)',
+        default=False,
+        help='عند التفعيل يستخدم تطبيق السائق مسار التحقق الجديد ويمنع الموقع الذي يعلّمه Android كموقع وهمي. عند التعطيل يبقى منطق GPS الحالي كما هو بدون تغيير.'
+    )
+
     driver_app_max_gps_accuracy = fields.Float(
         string='أقصى دقة GPS مسموحة (متر)',
         default=20.0,
@@ -127,6 +133,7 @@ class ResCompany(models.Model):
             'inactivity_lock_enabled': bool(self.driver_app_inactivity_lock_enabled),
             'inactivity_timeout_minutes': max(1, int(self.driver_app_inactivity_timeout_minutes or 5)),
             'max_gps_accuracy_meters': max(1.0, float(self.driver_app_max_gps_accuracy or 20.0)),
+            'mock_gps_protection_enabled': bool(self.driver_app_mock_gps_protection),
             'server_datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
             'server_date': now.strftime('%Y-%m-%d'),
             'server_time': now.strftime('%H:%M:%S'),

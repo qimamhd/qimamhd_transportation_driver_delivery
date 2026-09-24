@@ -12,6 +12,7 @@
                             <field name="driver_app_timezone"/>
                             <field name="driver_app_gps_policy"/>
                             <field name="driver_app_max_gps_accuracy"/>
+                            <field name="driver_app_mock_gps_protection"/>
                             <field name="driver_app_datetime_policy"/>
                             <field name="driver_app_allow_offline"/>
                             <field name="driver_app_trip_sheet_required"/>

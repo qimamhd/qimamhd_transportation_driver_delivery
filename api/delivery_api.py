@@ -479,6 +479,15 @@ class DriverAppDeliveryAPI(http.Controller):
         if gps_accuracy < 0 or gps_accuracy > 10000:
             return error('INVALID_GPS_ACCURACY', 'دقة GPS المرسلة غير صالحة.')
 
+        # Optional anti-spoofing layer. It is deliberately gated by company policy
+        # so existing customers keep the exact legacy GPS flow until enabled.
+        if policy.get('mock_gps_protection_enabled') and data.get('location_is_mocked') is True:
+            return error(
+                'MOCK_LOCATION_DETECTED',
+                'تعذر اعتماد الموقع لأن الجهاز يرسل موقعًا غير موثوق. أوقف تطبيقات تغيير الموقع ثم حاول مرة أخرى.',
+                status=409,
+            )
+
         trip_sheet_image = str(data.get('trip_sheet_image') or '').strip()
         trip_sheet_image_name = str(data.get('trip_sheet_image_name') or 'trip_sheet.jpg').strip()[:128]
         if trip_sheet_image:
