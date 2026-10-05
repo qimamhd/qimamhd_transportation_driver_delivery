@@ -1014,7 +1014,7 @@ class StoreDriverRequestLine(models.Model):
         string='الوجهة',
         compute='_compute_manual_destination_pricing_line_id',
         inverse='_inverse_manual_destination_pricing_line_id',
-        store=True,
+        store=False,
         copy=False,
         help='حقل واجهة للإدخال اليدوي فقط. يفلتر سجلات التسعير مباشرة حسب المصدر ثم يحفظ الوجهة في الحقل الأصلي.'
     )
