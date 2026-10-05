@@ -79,17 +79,21 @@
                             <group>
                                 <field name="name" readonly="1"/>
                                 <field name="driver_id"
-                                       attrs="{'readonly':[('state','!=','draft')]}"
+                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
+                                       force_save="1"
                                        options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                <field name="manual_source_path_id" readonly="1"/>
                                 <field name="branch_id" readonly="1" force_save="1"/>
                                 <field name="company_id" readonly="1" force_save="1"/>
                             </group>
 
                             <group>
                                 <field name="month_name"
-                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
+                                       force_save="1"/>
                                 <field name="year"
-                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
+                                       force_save="1"/>
                                 <field name="review_user_id" readonly="1"
                                        attrs="{'invisible':[('review_user_id','=',False)]}"/>
                                 <field name="review_date" readonly="1"
@@ -116,6 +120,7 @@
                             <page string="التوصيلات">
                                 <field name="request_lines" context="{'driver_app_parent_driver_id': driver_id, 'driver_app_parent_company_id': company_id}">
                                     <tree editable="bottom" default_order="request_date desc, request_time desc">
+                                        <field name="company_id" invisible="1"/>
                                         <field name="mobile_uuid" optional="hide" readonly="1"/>
                                         <field name="request_date"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
@@ -128,12 +133,16 @@
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="source_path_ids" invisible="1"/>
                                         <field name="source_path_id"
+                                               invisible="1"
                                                domain="[('id','in',source_path_ids)]"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="destination_path_ids" invisible="1"/>
-                                        <field name="destination_path_id"
-                                               domain="[('id','in',destination_path_ids)]"
+                                        <field name="destination_path_id" invisible="1"/>
+                                        <field name="manual_destination_pricing_line_id"
+                                               string="الوجهة"
+                                               domain="[('header_id.source_path_id','=',source_path_id)]"
+                                               context="{'driver_app_destination_picker': True}"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="driver_latitude" optional="hide"
@@ -143,8 +152,8 @@
                                         <field name="destination_latitude" optional="hide" readonly="1"/>
                                         <field name="destination_longitude" optional="hide" readonly="1"/>
                                         <field name="allowed_radius" optional="hide" readonly="1"/>
-                                        <field name="gps_distance" readonly="1"/>
-                                        <field name="gps_valid" readonly="1"/>
+                                        <field name="gps_distance" invisible="1" readonly="1"/>
+                                        <field name="gps_valid" invisible="1" readonly="1"/>
                                         <field name="gps_exception_approved" string="قبول استثنائي" readonly="1"/>
                                         <field name="review_state" readonly="1"/>
                                         <field name="reject_reason"
