@@ -259,6 +259,14 @@ class StoreDriverRequestBatch(models.Model):
         track_visibility='onchange'
     )
 
+    manual_source_path_id = fields.Many2one(
+        'trnsp.cars.areas',
+        string='المصدر',
+        compute='_compute_manual_source_path_id',
+        readonly=True,
+        help='حقل عرض للإدخال اليدوي فقط؛ يعرض مصدر السائق الثابت دون تغيير حقل المصدر المحفوظ في سطور التوصيلات.'
+    )
+
     month_name = fields.Selection([
         ('01', 'يناير'),
         ('02', 'فبراير'),
@@ -413,6 +421,41 @@ class StoreDriverRequestBatch(models.Model):
                 'trnsp.store.driver.request.batch'
             ) or '/'
         return super(StoreDriverRequestBatch, self).create(vals)
+
+    @api.depends('driver_id', 'company_id')
+    def _compute_manual_source_path_id(self):
+        Product = self.env['product.product'].sudo()
+        Pricing = self.env['trnsp.store.pricing'].sudo()
+        for rec in self:
+            rec.manual_source_path_id = False
+            if not rec.driver_id:
+                continue
+
+            car_domain = [
+                ('car_flag', '=', True),
+                ('car_driver_name', '=', rec.driver_id.id),
+            ]
+            if 'trailer_flag' in Product._fields:
+                car_domain.append(('trailer_flag', '=', False))
+            if 'company_id' in Product._fields and rec.company_id:
+                car_domain += [
+                    '|',
+                    ('company_id', '=', False),
+                    ('company_id', '=', rec.company_id.id),
+                ]
+            car = Product.search(car_domain, limit=1)
+            if not car or 'car_area_id' not in car._fields or not car.car_area_id:
+                continue
+
+            pricing_domain = [('source_path_id', '=', car.car_area_id.id)]
+            if 'company_id' in Pricing._fields and rec.company_id:
+                pricing_domain += [
+                    '|',
+                    ('company_id', '=', False),
+                    ('company_id', '=', rec.company_id.id),
+                ]
+            if Pricing.search(pricing_domain, limit=1):
+                rec.manual_source_path_id = car.car_area_id
 
     @api.depends(
         'request_lines',

@@ -79,8 +79,9 @@
                             <group>
                                 <field name="name" readonly="1"/>
                                 <field name="driver_id"
-                                       attrs="{'readonly':[('state','!=','draft')]}"
+                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
                                        options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                <field name="manual_source_path_id" readonly="1"/>
                                 <field name="branch_id" readonly="1" force_save="1"/>
                                 <field name="company_id" readonly="1" force_save="1"/>
                             </group>
@@ -129,6 +130,7 @@
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="source_path_ids" invisible="1"/>
                                         <field name="source_path_id"
+                                               invisible="1"
                                                domain="[('id','in',source_path_ids)]"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"
                                                options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
@@ -147,8 +149,8 @@
                                         <field name="destination_latitude" optional="hide" readonly="1"/>
                                         <field name="destination_longitude" optional="hide" readonly="1"/>
                                         <field name="allowed_radius" optional="hide" readonly="1"/>
-                                        <field name="gps_distance" readonly="1"/>
-                                        <field name="gps_valid" readonly="1"/>
+                                        <field name="gps_distance" invisible="1" readonly="1"/>
+                                        <field name="gps_valid" invisible="1" readonly="1"/>
                                         <field name="gps_exception_approved" string="قبول استثنائي" readonly="1"/>
                                         <field name="review_state" readonly="1"/>
                                         <field name="reject_reason"
