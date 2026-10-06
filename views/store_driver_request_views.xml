@@ -187,13 +187,6 @@
                                                 type="object"
                                                 class="btn-secondary"
                                                 attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
-                                        <button name="action_delete_trip_sheet_attachment"
-                                                string="حذف المرفق"
-                                                type="object"
-                                                class="btn-secondary"
-                                                confirm="هل تريد حذف المرفق من هذه التوصيلة؟"
-                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
                                         <button name="action_add_trip_sheet_attachment"
                                                 string="إضافة مرفق"
                                                 type="object"
@@ -244,6 +237,13 @@
                         <field name="trip_sheet_preview_html" widget="html" readonly="1" nolabel="1"/>
                     </sheet>
                     <footer>
+                        <button name="action_delete_trip_sheet_attachment"
+                                string="حذف المرفق"
+                                type="object"
+                                class="btn-secondary"
+                                confirm="هل تريد حذف المرفق من هذه التوصيلة؟"
+                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
+                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
                         <button string="إغلاق" special="cancel" class="btn-primary"/>
                     </footer>
                 </form>

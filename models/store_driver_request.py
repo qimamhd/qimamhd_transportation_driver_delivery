@@ -925,6 +925,10 @@ class StoreDriverRequestBatch(models.Model):
             ).write({
                 'review_state': 'pending',
                 'reject_reason': False,
+                'gps_exception_approved': False,
+                'gps_exception_reason': False,
+                'gps_exception_user_id': False,
+                'gps_exception_date': False,
             })
 
             now = rec.company_id._driver_app_local_now()
