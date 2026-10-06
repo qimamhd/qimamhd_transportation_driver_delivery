@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'QimamHD Transportation Driver Delivery',
-<<<<<<< HEAD
-    'version': '13.0.4.10.30',
-=======
-    'version': '13.0.4.10.29',
->>>>>>> d661dedd449f996beaaea3b98d88f8e74f6842a7
+    'version': '13.0.4.10.31',
     'summary': 'Driver app access and monthly restaurant delivery review before settlement',
     'category': 'Transportation',
     'author': 'QimamHD',

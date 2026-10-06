@@ -61,7 +61,7 @@
                                 string="إعادة فتح"
                                 type="object"
                                 groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','not in',['done','review','approved','rejected'])]}"/>
+                                attrs="{'invisible':[('state','not in',['done','review','approved','rejected','cancel'])]}"/>
 
                         <button name="action_cancel"
                                 string="إلغاء"

@@ -914,7 +914,7 @@ class StoreDriverRequestBatch(models.Model):
     def action_reopen(self):
         self._check_manager()
         for rec in self:
-            if rec.state not in ('done', 'review', 'approved', 'rejected'):
+            if rec.state not in ('done', 'review', 'approved', 'rejected', 'cancel'):
                 raise ValidationError(
                     _('لا يمكن إعادة فتح الطلب في الحالة الحالية.')
                 )
