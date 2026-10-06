@@ -80,6 +80,7 @@
                                 <field name="name" readonly="1"/>
                                 <field name="driver_id"
                                        attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
+                                       force_save="1"
                                        options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                 <field name="manual_source_path_id" readonly="1"/>
                                 <field name="branch_id" readonly="1" force_save="1"/>
@@ -88,9 +89,11 @@
 
                             <group>
                                 <field name="month_name"
-                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
+                                       force_save="1"/>
                                 <field name="year"
-                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
+                                       force_save="1"/>
                                 <field name="review_user_id" readonly="1"
                                        attrs="{'invisible':[('review_user_id','=',False)]}"/>
                                 <field name="review_date" readonly="1"

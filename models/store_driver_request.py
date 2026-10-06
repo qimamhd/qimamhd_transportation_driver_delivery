@@ -422,12 +422,31 @@ class StoreDriverRequestBatch(models.Model):
             ) or '/'
         return super(StoreDriverRequestBatch, self).create(vals)
 
-    @api.depends('driver_id', 'company_id')
+    @api.depends(
+        'driver_id',
+        'company_id',
+        'request_lines.source_path_id',
+    )
     def _compute_manual_source_path_id(self):
         Product = self.env['product.product'].sudo()
         Pricing = self.env['trnsp.store.pricing'].sudo()
         for rec in self:
             rec.manual_source_path_id = False
+
+            # App/API deliveries already keep the authoritative source on each
+            # line.  Reflect that same source in the batch header without
+            # changing the API payload or the stored line contract.  A batch is
+            # expected to have one source; if legacy data contains mixed
+            # sources, do not display a misleading header value.
+            line_sources = rec.request_lines.mapped('source_path_id')
+            if len(line_sources) == 1:
+                rec.manual_source_path_id = line_sources[0]
+                continue
+            if len(line_sources) > 1:
+                continue
+
+            # New/manual batches have no lines yet.  Keep the existing safe
+            # fallback: derive the driver's fixed source from the assigned car.
             if not rec.driver_id:
                 continue
 
