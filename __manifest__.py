@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'QimamHD Transportation Driver Delivery',
-    'version': '13.0.4.10.31',
+    'version': '13.0.4.10.33',
     'summary': 'Driver app access and monthly restaurant delivery review before settlement',
     'category': 'Transportation',
     'author': 'QimamHD',
@@ -19,6 +19,7 @@
         'views/delivery_period_views.xml',
         'views/store_driver_request_views.xml',
         'views/exception_accept_wizard_views.xml',
+        'views/trip_sheet_attachment_wizard_views.xml',
     ],
     'installable': True,
     'application': False,

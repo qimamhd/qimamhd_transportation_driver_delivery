@@ -9,3 +9,5 @@ from . import exception_accept_wizard
 from . import biometric_credential
 
 from . import res_company
+
+from . import trip_sheet_attachment_wizard

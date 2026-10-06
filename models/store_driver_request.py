@@ -1261,6 +1261,30 @@ class StoreDriverRequestLine(models.Model):
             'context': dict(self.env.context, create=False, edit=False),
         }
 
+    def action_add_trip_sheet_attachment(self):
+        """Open a small upload dialog only when this delivery has no attachment."""
+        self.ensure_one()
+        if self.trip_sheet_image:
+            raise ValidationError(_('يوجد مرفق لهذه التوصيلة بالفعل. احذف المرفق الحالي أولاً.'))
+        return {
+            'name': _('إضافة مرفق'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'trnsp.driver.delivery.trip.sheet.attachment.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_line_id': self.id},
+        }
+
+    def action_delete_trip_sheet_attachment(self):
+        """Remove only the trip-sheet attachment; keep all delivery/review data untouched."""
+        self.ensure_one()
+        if self.trip_sheet_image:
+            self.write({
+                'trip_sheet_image': False,
+                'trip_sheet_image_name': False,
+            })
+        return True
+
     def action_accept_line(self):
         self._check_reviewer_access()
         for rec in self:
