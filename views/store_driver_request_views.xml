@@ -182,17 +182,11 @@
                                                 attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','=','pending')]}"/>
                                         <field name="trip_sheet_image_name" invisible="1"/>
                                         <field name="trip_sheet_image" invisible="1"/>
-                                        <button name="action_view_trip_sheet_image"
-                                                string="عرض المرفق"
+                                        <button name="action_manage_trip_sheet_attachment"
+                                                string="المرفق"
                                                 type="object"
-                                                class="btn-secondary"
-                                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
-                                        <button name="action_add_trip_sheet_attachment"
-                                                string="إضافة مرفق"
-                                                type="object"
-                                                class="btn-secondary"
-                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':[('trip_sheet_image','!=',False)]}"/>
+                                                class="btn-secondary o_driver_delivery_attachment_action"
+                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"/>
                                         <field name="notes"
                                                attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="admin_notes"

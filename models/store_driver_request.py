@@ -1265,6 +1265,13 @@ class StoreDriverRequestLine(models.Model):
             'context': dict(self.env.context, create=False, edit=False),
         }
 
+    def action_manage_trip_sheet_attachment(self):
+        """Use one list-view action column: preview when present, upload when absent."""
+        self.ensure_one()
+        if self.trip_sheet_image:
+            return self.action_view_trip_sheet_image()
+        return self.action_add_trip_sheet_attachment()
+
     def action_add_trip_sheet_attachment(self):
         """Open a small upload dialog only when this delivery has no attachment."""
         self.ensure_one()

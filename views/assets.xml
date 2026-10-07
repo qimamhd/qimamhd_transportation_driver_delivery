@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="assets_backend" inherit_id="web.assets_backend" name="Driver delivery attachment action column">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/qimamhd_transportation_driver_delivery/static/src/js/attachment_action_column.js"/>
+        </xpath>
+    </template>
+</odoo>
