@@ -9,7 +9,10 @@ odoo.define('qimamhd_transportation_driver_delivery.attachment_action_column', f
                     node.attrs.name === 'action_manage_trip_sheet_attachment') {
                 node = _.extend({}, node, {
                     attrs: _.extend({}, node.attrs, {
-                        string: record.data.trip_sheet_image ? 'عرض المرفق' : 'إضافة مرفق'
+                        string: record.data.trip_sheet_image ? 'عرض المرفق' : 'إضافة مرفق',
+                        class: record.data.trip_sheet_image
+                            ? 'oe_highlight o_driver_delivery_attachment_action'
+                            : 'btn-secondary o_driver_delivery_attachment_action'
                     })
                 });
             }
