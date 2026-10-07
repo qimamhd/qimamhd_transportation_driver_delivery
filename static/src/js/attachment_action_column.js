@@ -16,6 +16,14 @@ odoo.define('qimamhd_transportation_driver_delivery.attachment_action_column', f
                     })
                 });
             }
+            if (node.tag === 'button' && node.attrs &&
+                    node.attrs.name === 'action_manage_accept_line') {
+                node = _.extend({}, node, {
+                    attrs: _.extend({}, node.attrs, {
+                        string: record.data.gps_valid ? 'قبول' : 'قبول استثنائي'
+                    })
+                });
+            }
             return this._super(record, node, index, options);
         },
     });

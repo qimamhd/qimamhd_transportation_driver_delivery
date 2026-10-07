@@ -1296,6 +1296,13 @@ class StoreDriverRequestLine(models.Model):
             })
         return True
 
+    def action_manage_accept_line(self):
+        """Keep one list-view accept column while preserving the existing accept paths."""
+        self.ensure_one()
+        if self.gps_valid:
+            return self.action_accept_line()
+        return self.action_open_exception_accept()
+
     def action_accept_line(self):
         self._check_reviewer_access()
         for rec in self:
