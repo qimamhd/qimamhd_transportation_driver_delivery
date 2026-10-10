@@ -1974,6 +1974,22 @@ class StoreDriverRequestLine(models.Model):
                 _('لا يمكن إضافة توصيلات جديدة لأن ملف السائق غير مفتوح.')
             )
 
+        # Serialize creates for the same driver across API and manual Odoo entry.
+        # The row lock is held until transaction commit, preventing two simultaneous
+        # requests from both passing the daily-limit check.
+        if batch and batch.exists() and batch.company_id.driver_app_one_delivery_per_day:
+            self.env.cr.execute('SELECT id FROM hr_employee WHERE id = %s FOR UPDATE', (batch.driver_id.id,))
+            request_date = vals.get('request_date') or fields.Date.context_today(self)
+            if isinstance(request_date, str):
+                request_date = fields.Date.from_string(request_date)
+            existing = self.sudo().search([
+                ('driver_id', '=', batch.driver_id.id),
+                ('company_id', '=', batch.company_id.id),
+                ('request_date', '=', fields.Date.to_string(request_date)),
+            ], limit=1)
+            if existing:
+                raise ValidationError(_('يسمح إعداد الشركة بتوصيلة واحدة فقط لكل سائق في اليوم المحدد.'))
+
         rec = super(StoreDriverRequestLine, self).create(vals)
         rec._load_destination_gps()
         rec._calculate_gps()

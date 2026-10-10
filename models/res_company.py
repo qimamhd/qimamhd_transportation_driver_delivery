@@ -29,6 +29,12 @@ class ResCompany(models.Model):
         ('backend_periods', 'فترات التوصيل من الباك إند'),
     ], string='مصدر فترات التطبيق', required=True, default='current_month')
 
+    driver_app_one_delivery_per_day = fields.Boolean(
+        string='توصيلة واحدة فقط لكل سائق يوميًا',
+        default=True,
+        help='عند التفعيل يُمنع تسجيل أكثر من توصيلة للسائق في التاريخ نفسه، بما في ذلك الإدخال اليدوي. عند التعطيل يبقى السماح بعدة توصيلات كما كان.',
+    )
+
     driver_app_allow_offline = fields.Boolean(
         string='السماح بالتسجيل بدون إنترنت',
         default=False,
@@ -125,6 +131,7 @@ class ResCompany(models.Model):
             'gps_mode': self.driver_app_gps_policy or 'strict',
             'period_mode': self.driver_app_period_policy or 'current_month',
             'allow_offline': bool(self.driver_app_allow_offline),
+            'one_delivery_per_day': bool(self.driver_app_one_delivery_per_day),
             'datetime_mode': self.driver_app_datetime_policy or 'server_now',
             'auto_close_previous_periods': bool(self.driver_app_auto_close_previous_months),
             'trip_sheet_required': bool(self.driver_app_trip_sheet_required),
