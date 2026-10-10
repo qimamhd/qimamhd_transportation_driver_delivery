@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <odoo>
     <data>
 
@@ -17,97 +17,47 @@
                 <form string="طلبات تطبيق السائقين">
 
                     <header>
-                        <button name="action_mark_done"
-                                string="إكمال السائق"
-                                type="object"
-                                class="oe_highlight"
-                                attrs="{'invisible':[('state','!=','draft')]}"/>
+                        <button name="action_mark_done" string="إكمال السائق" type="object" class="oe_highlight" attrs="{'invisible':[('state','!=','draft')]}"/>
 
-                        <button name="action_start_review"
-                                string="بدء المراجعة"
-                                type="object"
-                                class="oe_highlight"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                attrs="{'invisible':[('state','not in',['draft','done'])]}"/>
+                        <button name="action_start_review" string="بدء المراجعة" type="object" class="oe_highlight" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':[('state','not in',['draft','done'])]}"/>
 
-                        <button name="action_accept_all"
-                                string="قبول جميع السطور"
-                                type="object"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                attrs="{'invisible':[('state','!=','review')]}"/>
+                        <button name="action_accept_all" string="قبول جميع السطور" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':[('state','!=','review')]}"/>
 
-                        <button name="action_approve"
-                                string="اعتماد"
-                                type="object"
-                                class="oe_highlight"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                attrs="{'invisible':[('state','!=','review')]}"/>
+                        <button name="action_approve" string="اعتماد" type="object" class="oe_highlight" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':[('state','!=','review')]}"/>
 
-                        <button name="action_transfer_to_settlement"
-                                string="تحويل إلى تسوية السائق"
-                                type="object"
-                                class="oe_highlight"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','!=','approved')]}"/>
+                        <button name="action_transfer_to_settlement" string="تحويل إلى تسوية السائق" type="object" class="oe_highlight" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" attrs="{'invisible':[('state','!=','approved')]}"/>
 
-                        <button name="action_rollback_transfer"
-                                string="التراجع عن التحويل"
-                                type="object"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                confirm="سيتم حذف تسوية السائق المسودة الناتجة عن هذا الملف وإرجاع الملف إلى حالة معتمد. هل تريد المتابعة؟"
-                                attrs="{'invisible':[('state','!=','transferred')]}"/>
+                        <button name="action_rollback_transfer" string="التراجع عن التحويل" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" confirm="سيتم حذف تسوية السائق المسودة الناتجة عن هذا الملف وإرجاع الملف إلى حالة معتمد. هل تريد المتابعة؟" attrs="{'invisible':[('state','!=','transferred')]}"/>
 
-                        <button name="action_reopen"
-                                string="إعادة فتح"
-                                type="object"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','not in',['done','review','approved','rejected','cancel'])]}"/>
+                        <button name="action_reopen" string="إعادة فتح" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" attrs="{'invisible':[('state','not in',['done','review','approved','rejected','cancel'])]}"/>
 
-                        <button name="action_cancel"
-                                string="إلغاء"
-                                type="object"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','in',['cancel','rejected','transferred'])]}"/>
+                        <button name="action_cancel" string="إلغاء" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" attrs="{'invisible':[('state','in',['cancel','rejected','transferred'])]}"/>
 
-                        <field name="state"
-                               widget="statusbar"
-                               statusbar_visible="draft,done,review,approved,rejected,transferred"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,done,review,approved,rejected,transferred"/>
                     </header>
 
-                    <sheet>
-                        <group>
+                    <sheet class="o_driver_delivery_batch_sheet">
+                        <group string="بيانات ملف السائق والفترة" col="2">
                             <group>
                                 <field name="name" readonly="1"/>
-                                <field name="driver_id"
-                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
-                                       force_save="1"
-                                       options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                <field name="driver_id" attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}" force_save="1" options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                 <field name="manual_source_path_id" readonly="1"/>
                                 <field name="branch_id" readonly="1" force_save="1"/>
                                 <field name="company_id" readonly="1" force_save="1"/>
                             </group>
 
                             <group>
-                                <field name="month_name"
-                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
-                                       force_save="1"/>
-                                <field name="year"
-                                       attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}"
-                                       force_save="1"/>
-                                <field name="review_user_id" readonly="1"
-                                       attrs="{'invisible':[('review_user_id','=',False)]}"/>
-                                <field name="review_date" readonly="1"
-                                       attrs="{'invisible':[('review_date','=',False)]}"/>
-                                <field name="approve_user_id" readonly="1"
-                                       attrs="{'invisible':[('approve_user_id','=',False)]}"/>
-                                <field name="approve_date" readonly="1"
-                                       attrs="{'invisible':[('approve_date','=',False)]}"/>
-                                <field name="settlement_id" readonly="1"
-                                       attrs="{'invisible':[('settlement_id','=',False)]}"/>
+                                <field name="month_name" attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}" force_save="1"/>
+                                <field name="year" attrs="{'readonly':['|',('state','!=','draft'),('line_count','&gt;',0)]}" force_save="1"/>
+                                <field name="review_user_id" readonly="1" attrs="{'invisible':[('review_user_id','=',False)]}"/>
+                                <field name="review_date" readonly="1" attrs="{'invisible':[('review_date','=',False)]}"/>
+                                <field name="approve_user_id" readonly="1" attrs="{'invisible':[('approve_user_id','=',False)]}"/>
+                                <field name="approve_date" readonly="1" attrs="{'invisible':[('approve_date','=',False)]}"/>
+                                <field name="settlement_id" readonly="1" attrs="{'invisible':[('settlement_id','=',False)]}"/>
                             </group>
                         </group>
 
-                        <group string="ملخص الطلبات" col="6">
+                        <group string="ملخص التوصيلات" col="6">
                             <field name="line_count" readonly="1"/>
                             <field name="gps_valid_count" readonly="1"/>
                             <field name="gps_invalid_count" readonly="1"/>
@@ -122,33 +72,17 @@
                                     <tree editable="bottom" default_order="request_date desc, request_time desc">
                                         <field name="company_id" invisible="1"/>
                                         <field name="mobile_uuid" optional="hide" readonly="1"/>
-                                        <field name="request_date"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"/>
-                                        <field name="request_time"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"/>
+                                        <field name="request_date" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
+                                        <field name="request_time" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="allowed_product_car_ids" invisible="1"/>
-                                        <field name="product_car_id"
-                                               domain="[('id','in',allowed_product_car_ids)]"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"
-                                               options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                        <field name="product_car_id" domain="[('id','in',allowed_product_car_ids)]" attrs="{'readonly':[('parent.state','!=','draft')]}" options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="source_path_ids" invisible="1"/>
-                                        <field name="source_path_id"
-                                               invisible="1"
-                                               domain="[('id','in',source_path_ids)]"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"
-                                               options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                        <field name="source_path_id" invisible="1" domain="[('id','in',source_path_ids)]" attrs="{'readonly':[('parent.state','!=','draft')]}" options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
                                         <field name="destination_path_ids" invisible="1"/>
                                         <field name="destination_path_id" invisible="1"/>
-                                        <field name="manual_destination_pricing_line_id"
-                                               string="الوجهة"
-                                               domain="[('header_id.source_path_id','=',source_path_id)]"
-                                               context="{'driver_app_destination_picker': True}"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"
-                                               options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
-                                        <field name="driver_latitude" optional="hide"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"/>
-                                        <field name="driver_longitude" optional="hide"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"/>
+                                        <field name="manual_destination_pricing_line_id" string="الوجهة" domain="[('header_id.source_path_id','=',source_path_id)]" context="{'driver_app_destination_picker': True}" attrs="{'readonly':[('parent.state','!=','draft')]}" options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
+                                        <field name="driver_latitude" optional="hide" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
+                                        <field name="driver_longitude" optional="hide" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="destination_latitude" optional="hide" readonly="1"/>
                                         <field name="destination_longitude" optional="hide" readonly="1"/>
                                         <field name="allowed_radius" optional="hide" readonly="1"/>
@@ -156,35 +90,15 @@
                                         <field name="gps_valid" invisible="1" readonly="1"/>
                                         <field name="gps_exception_approved" string="قبول استثنائي" readonly="1"/>
                                         <field name="review_state" readonly="1"/>
-                                        <field name="reject_reason"
-                                               attrs="{'readonly':[('parent.state','in',['approved','rejected','transferred','cancel'])], 'invisible':[('review_state','!=','rejected')]}"/>
-                                        <button name="action_manage_accept_line"
-                                                string="قبول"
-                                                type="object"
-                                                class="oe_highlight o_driver_delivery_accept_action"
-                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
-                                        <button name="action_reject_line"
-                                                string="رفض"
-                                                type="object"
-                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
-                                        <button name="action_reset_review_line"
-                                                string="إعادة للمراجعة"
-                                                type="object"
-                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                                attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','=','pending')]}"/>
+                                        <field name="reject_reason" attrs="{'readonly':[('parent.state','in',['approved','rejected','transferred','cancel'])], 'invisible':[('review_state','!=','rejected')]}"/>
+                                        <button name="action_manage_accept_line" string="قبول" type="object" class="oe_highlight o_driver_delivery_accept_action" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
+                                        <button name="action_reject_line" string="رفض" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','!=','pending')]}"/>
+                                        <button name="action_reset_review_line" string="إعادة للمراجعة" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':['|',('parent.state','in',['approved','rejected','transferred','cancel']),('review_state','=','pending')]}"/>
                                         <field name="trip_sheet_image_name" invisible="1"/>
                                         <field name="trip_sheet_image" invisible="1"/>
-                                        <button name="action_manage_trip_sheet_attachment"
-                                                string="المرفق"
-                                                type="object"
-                                                class="btn-secondary o_driver_delivery_attachment_action"
-                                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"/>
-                                        <field name="notes"
-                                               attrs="{'readonly':[('parent.state','!=','draft')]}"/>
-                                        <field name="admin_notes"
-                                               attrs="{'readonly':[('parent.state','not in',['review','approved'])]}"/>
+                                        <button name="action_manage_trip_sheet_attachment" string="المرفق" type="object" class="btn-secondary o_driver_delivery_attachment_action" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"/>
+                                        <field name="notes" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
+                                        <field name="admin_notes" attrs="{'readonly':[('parent.state','not in',['review','approved'])]}"/>
                                         <field name="gps_exception_reason" optional="hide" readonly="1"/>
                                         <field name="gps_exception_user_id" optional="hide" readonly="1"/>
                                         <field name="gps_exception_date" optional="hide" readonly="1"/>
@@ -226,13 +140,7 @@
                         <field name="trip_sheet_preview_html" widget="html" readonly="1" nolabel="1"/>
                     </sheet>
                     <footer>
-                        <button name="action_delete_trip_sheet_attachment"
-                                string="حذف المرفق"
-                                type="object"
-                                class="btn-secondary"
-                                confirm="هل تريد حذف المرفق من هذه التوصيلة؟"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"
-                                attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
+                        <button name="action_delete_trip_sheet_attachment" string="حذف المرفق" type="object" class="btn-secondary" confirm="هل تريد حذف المرفق من هذه التوصيلة؟" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
                         <button string="إغلاق" special="cancel" class="btn-primary"/>
                     </footer>
                 </form>
@@ -243,10 +151,7 @@
             <field name="name">trnsp.store.driver.request.batch.tree</field>
             <field name="model">trnsp.store.driver.request.batch</field>
             <field name="arch" type="xml">
-                <tree default_order="year desc, month_name desc, id desc"
-                      decoration-info="state == 'review'"
-                      decoration-success="state == 'approved'"
-                      decoration-danger="state in ('rejected', 'cancel')">
+                <tree default_order="year desc, month_name desc, id desc" decoration-info="state == 'review'" decoration-success="state == 'approved'" decoration-danger="state in ('rejected', 'cancel')">
                     <field name="name"/>
                     <field name="driver_id"/>
                     <field name="month_name"/>
@@ -274,21 +179,14 @@
                     <field name="year"/>
                     <field name="state"/>
 
-                    <filter string="غير المحولة للحسابات" name="filter_not_transferred"
-                            domain="[('state','not in',['transferred','rejected'])]"/>
+                    <filter string="غير المحولة للحسابات" name="filter_not_transferred" domain="[('state','not in',['transferred','rejected'])]"/>
 
-                    <filter string="مفتوحة" name="filter_draft"
-                            domain="[('state','=','draft')]"/>
-                    <filter string="مكتملة من السائق" name="filter_done"
-                            domain="[('state','=','done')]"/>
-                    <filter string="قيد المراجعة" name="filter_review"
-                            domain="[('state','=','review')]"/>
-                    <filter string="معتمدة" name="filter_approved"
-                            domain="[('state','=','approved')]"/>
-                    <filter string="تم التحويل" name="filter_transferred"
-                            domain="[('state','=','transferred')]"/>
-                    <filter string="مرفوض بالكامل" name="filter_rejected"
-                            domain="[('state','=','rejected')]"/>
+                    <filter string="مفتوحة" name="filter_draft" domain="[('state','=','draft')]"/>
+                    <filter string="مكتملة من السائق" name="filter_done" domain="[('state','=','done')]"/>
+                    <filter string="قيد المراجعة" name="filter_review" domain="[('state','=','review')]"/>
+                    <filter string="معتمدة" name="filter_approved" domain="[('state','=','approved')]"/>
+                    <filter string="تم التحويل" name="filter_transferred" domain="[('state','=','transferred')]"/>
+                    <filter string="مرفوض بالكامل" name="filter_rejected" domain="[('state','=','rejected')]"/>
 
                     <separator/>
 
@@ -315,12 +213,7 @@
             <field name="context">{'search_default_filter_not_transferred': 1}</field>
         </record>
 
-        <menuitem id="menu_trnsp_store_driver_request_batch"
-                  name="طلبات تطبيق السائقين"
-                  parent="qimamhd_transportation_v2_13.transportation_entry_menu"
-                  action="action_trnsp_store_driver_request_batch"
-                  sequence="75"
-                  groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"/>
+        <menuitem id="menu_trnsp_store_driver_request_batch" name="طلبات تطبيق السائقين" parent="qimamhd_transportation_v2_13.transportation_entry_menu" action="action_trnsp_store_driver_request_batch" sequence="75" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer"/>
 
     </data>
 </odoo>

@@ -1,13 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <odoo>
     <data>
         <record id="trnsp_driver_delivery_period_tree" model="ir.ui.view">
             <field name="name">trnsp.driver.delivery.period.tree</field>
             <field name="model">trnsp.driver.delivery.period</field>
             <field name="arch" type="xml">
-                <tree default_order="year desc, month_name desc"
-                      decoration-success="state == 'open'"
-                      decoration-muted="state == 'closed'">
+                <tree default_order="year desc, month_name desc" decoration-success="state == 'open'" decoration-muted="state == 'closed'">
                     <field name="name" string="الفترة"/>
                     <field name="month_name"/>
                     <field name="year"/>
@@ -20,14 +18,8 @@
                     <field name="opened_at" optional="hide"/>
                     <field name="closed_by" optional="hide"/>
                     <field name="closed_at" optional="hide"/>
-                    <button name="action_open_period" string="فتح" type="object"
-                            class="oe_highlight"
-                            groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                            attrs="{'invisible':[('state','=','open')]}"/>
-                    <button name="action_close_period" string="إقفال" type="object"
-                            groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                            confirm="بعد الإقفال لن تظهر هذه الفترة للسائقين ولن تقبل توصيلات جديدة. هل تريد المتابعة؟"
-                            attrs="{'invisible':[('state','=','closed')]}"/>
+                    <button name="action_open_period" string="فتح" type="object" class="oe_highlight" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" attrs="{'invisible':[('state','=','open')]}"/>
+                    <button name="action_close_period" string="إقفال" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" confirm="بعد الإقفال لن تظهر هذه الفترة للسائقين ولن تقبل توصيلات جديدة. هل تريد المتابعة؟" attrs="{'invisible':[('state','=','closed')]}"/>
                 </tree>
             </field>
         </record>
@@ -38,17 +30,11 @@
             <field name="arch" type="xml">
                 <form string="إدارة فترة التوصيل">
                     <header>
-                        <button name="action_open_period" string="فتح الفترة للتسجيل" type="object"
-                                class="oe_highlight"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                attrs="{'invisible':[('state','=','open')]}"/>
-                        <button name="action_close_period" string="إقفال الفترة" type="object"
-                                groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"
-                                confirm="بعد الإقفال لن تظهر هذه الفترة للسائقين ولن تقبل توصيلات جديدة. هل تريد المتابعة؟"
-                                attrs="{'invisible':[('state','=','closed')]}"/>
+                        <button name="action_open_period" string="فتح الفترة للتسجيل" type="object" class="oe_highlight" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" attrs="{'invisible':[('state','=','open')]}"/>
+                        <button name="action_close_period" string="إقفال الفترة" type="object" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager" confirm="بعد الإقفال لن تظهر هذه الفترة للسائقين ولن تقبل توصيلات جديدة. هل تريد المتابعة؟" attrs="{'invisible':[('state','=','closed')]}"/>
                         <field name="state" widget="statusbar" statusbar_visible="open,closed"/>
                     </header>
-                    <sheet>
+                    <sheet class="o_driver_delivery_period_sheet">
                         <div class="oe_button_box" name="button_box">
                             <button name="action_view_period_batches" type="object" class="oe_stat_button" icon="fa-files-o">
                                 <field name="existing_batch_count" widget="statinfo" string="ملفات الفترة"/>
@@ -61,7 +47,7 @@
                             <label for="name"/>
                             <h1><field name="name" readonly="1"/></h1>
                         </div>
-                        <group>
+                        <group col="2" string="بيانات فترة التوصيل"><group col="2">
                             <group string="الفترة">
                                 <field name="month_name"/>
                                 <field name="year"/>
@@ -80,10 +66,10 @@
                                 <field name="closed_at" readonly="1"/>
                             </group>
                         </group>
-                        <group string="ملاحظات الإدارة">
+                        <group string="ملاحظات الإدارة" col="2">
                             <field name="notes" placeholder="سبب فتح فترة سابقة أو أي ملاحظة إدارية..."/>
                         </group>
-                    </sheet>
+                    </group></sheet>
                 </form>
             </field>
         </record>
@@ -116,11 +102,6 @@
             <field name="context">{}</field>
         </record>
 
-        <menuitem id="menu_trnsp_driver_delivery_period"
-                  name="إدارة فترات التوصيل"
-                  parent="qimamhd_transportation_v2_13.transportation_entry_menu"
-                  action="action_trnsp_driver_delivery_period"
-                  sequence="74"
-                  groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"/>
+        <menuitem id="menu_trnsp_driver_delivery_period" name="إدارة فترات التوصيل" parent="qimamhd_transportation_v2_13.transportation_entry_menu" action="action_trnsp_driver_delivery_period" sequence="74" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"/>
     </data>
 </odoo>
