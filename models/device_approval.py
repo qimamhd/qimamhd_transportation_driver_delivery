@@ -45,16 +45,11 @@ class DriverDeviceApproval(models.Model):
         if not self.env.user.has_group('qimamhd_transportation_driver_delivery.group_driver_request_manager'):
             raise AccessError(_('Only driver app managers may review device approvals.'))
 
-    def action_approve(self):
+    def _issue_activation_code(self):
+        """Rotate a short-lived activation code without changing device identity."""
         self.ensure_one()
-        self._require_manager()
-        if self.state != 'pending':
-            raise UserError(_('Only pending requests can be approved.'))
         code = secrets.token_urlsafe(24)
         self.write({
-            'state': 'approved',
-            'reviewed_by': self.env.uid,
-            'reviewed_at': fields.Datetime.now(),
             'activation_hash': hashlib.sha256(code.encode('utf-8')).hexdigest(),
             'activation_expires_at': fields.Datetime.now() + timedelta(minutes=5),
             'failed_attempts': 0,
@@ -67,6 +62,34 @@ class DriverDeviceApproval(models.Model):
             'target': 'new',
             'res_id': self.env['trnsp.driver.activation.display'].create({'code': code}).id,
         }
+
+    def action_approve(self):
+        self.ensure_one()
+        self._require_manager()
+        if self.state != 'pending':
+            raise UserError(_('Only pending requests can be approved.'))
+        self.write({
+            'state': 'approved',
+            'reviewed_by': self.env.uid,
+            'reviewed_at': fields.Datetime.now(),
+        })
+        return self._issue_activation_code()
+
+    def action_reissue_activation(self):
+        """Issue a new one-time code for an approved, not-yet-activated device."""
+        self.ensure_one()
+        self._require_manager()
+        # Serialize concurrent reissues and re-read the current record state.
+        self.env.cr.execute(
+            'SELECT id FROM trnsp_driver_device_approval WHERE id = %s FOR UPDATE',
+            (self.id,),
+        )
+        self.invalidate_cache()
+        if self.state != 'approved':
+            raise UserError(_('Only approved device requests can receive a new activation code.'))
+        if self.activation_used_at:
+            raise UserError(_('This device is already activated. Reissuing a code is not allowed.'))
+        return self._issue_activation_code()
 
     def action_reject(self):
         self._require_manager()

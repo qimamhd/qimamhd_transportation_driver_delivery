@@ -14,6 +14,9 @@
   <field name="arch" type="xml"><form create="false" edit="false" delete="false">
    <header>
     <button name="action_approve" string="موافقة وإصدار رمز" type="object" class="oe_highlight" attrs="{'invisible':[('state','!=','pending')]}"/>
+    <button name="action_reissue_activation" string="إعادة إصدار رمز التفعيل" type="object"
+            class="oe_highlight"
+            attrs="{'invisible':['|',('state','!=','approved'),('activation_used_at','!=',False)]}"/>
     <button name="action_reject" string="رفض" type="object" attrs="{'invisible':[('state','!=','pending')]}"/>
     <button name="action_revoke" string="إلغاء الاعتماد" type="object" attrs="{'invisible':[('state','not in',['approved'])]}"/>
     <field name="state" widget="statusbar" statusbar_visible="pending,approved,rejected,revoked"/>
