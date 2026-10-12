@@ -65,6 +65,11 @@ class ResCompany(models.Model):
         help='عند التفعيل يظهر خيار بدء رحلة جديدة في تطبيق السائق ويُسمح بإكمال هذا المسار. عند التعطيل يبقى خيار التوصيلة المباشرة متاحًا، ولا يتأثر أي منطق GPS أو سياسات التوصيل الأخرى.'
     )
 
+    driver_app_device_proof_required = fields.Boolean(
+        string='إلزام التوقيع الرقمي لجهاز السائق', default=False,
+        help='لا تفعّل قبل تحديث تطبيقات السائقين واختبار توقيع كل طلب API.',
+    )
+
     driver_app_single_device = fields.Boolean(
         string='تقييد السائق بجهاز واحد',
         default=False,

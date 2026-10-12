@@ -7,6 +7,7 @@ from odoo.http import request
 
 from .common import (
     authenticate_driver,
+    require_signed_device_request,
     error,
     ok,
     read_json_body,
@@ -113,6 +114,10 @@ class DriverAppAuthAPI(http.Controller):
                     'هذا الحساب مرتبط بجهاز آخر. يرجى التواصل مع المسؤول لتغيير الجهاز المعتمد.',
                     status=403,
                 )
+
+        proof_error = require_signed_device_request(driver)
+        if proof_error:
+            return proof_error
 
         driver.sudo().write({
             'app_failed_attempts': 0,

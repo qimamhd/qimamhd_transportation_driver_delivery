@@ -7,3 +7,5 @@ from . import delivery_api
 from . import health_api
 
 from . import dashboard_api
+
+from . import device_approval_api

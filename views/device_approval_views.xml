@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+ <record id="view_driver_device_approval_tree" model="ir.ui.view">
+  <field name="name">trnsp.driver.device.approval.tree</field>
+  <field name="model">trnsp.driver.device.approval</field>
+  <field name="arch" type="xml"><tree create="false" edit="false" delete="false">
+   <field name="create_date"/><field name="device_name"/><field name="device_id"/>
+   <field name="database_name"/><field name="server_origin"/><field name="company_id"/><field name="state"/>
+  </tree></field>
+ </record>
+ <record id="view_driver_device_approval_form" model="ir.ui.view">
+  <field name="name">trnsp.driver.device.approval.form</field>
+  <field name="model">trnsp.driver.device.approval</field>
+  <field name="arch" type="xml"><form create="false" edit="false" delete="false">
+   <header>
+    <button name="action_approve" string="موافقة وإصدار رمز" type="object" class="oe_highlight" attrs="{'invisible':[('state','!=','pending')]}"/>
+    <button name="action_reject" string="رفض" type="object" attrs="{'invisible':[('state','!=','pending')]}"/>
+    <button name="action_revoke" string="إلغاء الاعتماد" type="object" attrs="{'invisible':[('state','not in',['approved'])]}"/>
+    <field name="state" widget="statusbar" statusbar_visible="pending,approved,rejected,revoked"/>
+   </header>
+   <sheet><group><group>
+    <field name="company_id"/><field name="device_name"/><field name="device_id"/>
+    <field name="database_name"/><field name="server_origin"/>
+   </group><group>
+    <field name="request_nonce"/><field name="public_key"/>
+    <field name="reviewed_by"/><field name="reviewed_at"/>
+    <field name="activation_expires_at"/><field name="activation_used_at"/>
+   </group></group></sheet>
+  </form></field>
+ </record>
+ <record id="view_driver_activation_display_form" model="ir.ui.view">
+  <field name="name">trnsp.driver.activation.display.form</field>
+  <field name="model">trnsp.driver.activation.display</field>
+  <field name="arch" type="xml"><form string="رمز تفعيل مؤقت"><group>
+   <label string="انسخ الرمز الآن؛ لن يظهر مرة أخرى. تنتهي صلاحيته بعد 5 دقائق."/>
+   <field name="code" readonly="1"/>
+  </group><footer><button string="إغلاق" special="cancel" class="btn-primary"/></footer></form></field>
+ </record>
+ <record id="action_driver_device_approvals" model="ir.actions.act_window">
+  <field name="name">اعتماد أجهزة تطبيق السائقين</field>
+  <field name="res_model">trnsp.driver.device.approval</field>
+  <field name="view_mode">tree,form</field>
+ </record>
+ <menuitem id="menu_driver_device_approvals" name="اعتماد أجهزة التطبيق" parent="qimamhd_transportation_v2_13.transportation_entry_menu" action="action_driver_device_approvals" sequence="76" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"/>
+</odoo>

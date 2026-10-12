@@ -11,3 +11,7 @@ from . import biometric_credential
 from . import res_company
 
 from . import trip_sheet_attachment_wizard
+
+from . import device_approval
+
+from . import device_proof_nonce

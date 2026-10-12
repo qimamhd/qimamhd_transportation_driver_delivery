@@ -1,6 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import hashlib
+import base64
+import binascii
+import hmac
+import re
+import time
+
+try:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from cryptography.exceptions import InvalidSignature
+except ImportError:
+    Ed25519PublicKey = None
+    InvalidSignature = Exception
 import json
 from datetime import datetime
 
@@ -95,6 +107,68 @@ def token_hash(token):
     return hashlib.sha256((token or '').encode('utf-8')).hexdigest()
 
 
+def require_signed_device_request(driver, bearer=''):
+    """Opt-in Ed25519 proof for each protected request; fail closed when enabled.
+
+    Signed UTF-8 message is the newline-delimited string:
+    QIMAM-REQUEST-V2, database, approval_id, timestamp, nonce, method,
+    path, raw query string, sha256(raw request body), sha256(bearer token or empty string).
+    Nonce is recorded with a database uniqueness constraint before returning.
+    """
+    company = driver.company_id
+    if not company or not company.driver_app_device_proof_required:
+        return None
+    if Ed25519PublicKey is None:
+        return error('DEVICE_PROOF_UNAVAILABLE', 'التحقق الأمني غير متاح.', status=503)
+    headers = request.httprequest.headers
+    approval_text = headers.get('X-Qimam-Approval', '')
+    timestamp_text = headers.get('X-Qimam-Timestamp', '')
+    nonce = headers.get('X-Qimam-Nonce', '')
+    signature = headers.get('X-Qimam-Signature', '')
+    if (not re.fullmatch(r'[1-9][0-9]{0,12}', approval_text)
+            or not re.fullmatch(r'[0-9]{10}', timestamp_text)
+            or not re.fullmatch(r'[A-Za-z0-9_-]{32,96}', nonce)
+            or not re.fullmatch(r'[A-Za-z0-9_-]{80,100}={0,2}', signature)):
+        return error('DEVICE_PROOF_REQUIRED', 'يلزم إثبات اعتماد الجهاز.', status=403)
+    if abs(int(time.time()) - int(timestamp_text)) > 90:
+        return error('DEVICE_PROOF_EXPIRED', 'انتهت صلاحية إثبات الجهاز.', status=403)
+    approval = request.env['trnsp.driver.device.approval'].sudo().browse(int(approval_text)).exists()
+    if (not approval or approval.state != 'approved' or not approval.activation_used_at
+            or not approval.credential_hash or approval.database_name != request.db
+            or approval.company_id.id != company.id
+            or not driver.app_device_id or approval.device_id != driver.app_device_id):
+        return error('DEVICE_NOT_APPROVED', 'الجهاز غير معتمد.', status=403)
+    body = request.httprequest.get_data(cache=True)
+    if len(body) > 2 * 1024 * 1024:
+        return error('PAYLOAD_TOO_LARGE', 'حجم الطلب أكبر من المسموح.', status=413)
+    method = request.httprequest.method.upper()
+    path = request.httprequest.path
+    message = '\n'.join((
+        'QIMAM-REQUEST-V2', request.db, approval_text, timestamp_text, nonce,
+        method, path, request.httprequest.query_string.decode('latin-1'), hashlib.sha256(body).hexdigest(),
+        hashlib.sha256((bearer or '').encode('utf-8')).hexdigest(),
+    )).encode('utf-8')
+    try:
+        key = base64.urlsafe_b64decode(approval.public_key + '=' * (-len(approval.public_key) % 4))
+        sig = base64.urlsafe_b64decode(signature + '=' * (-len(signature) % 4))
+        if len(key) != 32 or len(sig) != 64:
+            raise ValueError('Invalid key/signature size')
+        Ed25519PublicKey.from_public_bytes(key).verify(sig, message)
+    except (ValueError, binascii.Error, InvalidSignature):
+        return error('INVALID_DEVICE_PROOF', 'توقيع الجهاز غير صحيح.', status=403)
+    # Atomic replay defense: unique nonce per approval, independent of workers.
+    # Use a savepoint so a collision does not abort the outer transaction.
+    from psycopg2 import IntegrityError
+    try:
+        with request.env.cr.savepoint():
+            request.env['trnsp.driver.device.proof.nonce'].sudo().create({
+                'approval_id': approval.id, 'nonce': nonce,
+            })
+    except IntegrityError:
+        return error('DEVICE_PROOF_REPLAY', 'تم استخدام هذا الإثبات مسبقًا.', status=403)
+    return None
+
+
 def authenticate_driver():
     token = bearer_token()
     if not token:
@@ -119,6 +193,9 @@ def authenticate_driver():
         )
 
     driver = session.employee_id.sudo()
+    proof_error = require_signed_device_request(driver, token)
+    if proof_error:
+        return None, proof_error
     if not driver or not driver.app_access_enabled or not driver.driver_emp:
         session.sudo().write({'revoked': True})
         return None, error(
