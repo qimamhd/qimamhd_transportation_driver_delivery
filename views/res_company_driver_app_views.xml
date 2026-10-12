@@ -19,6 +19,7 @@
                             <field name="driver_app_trip_sheet_required"/>
                             <field name="driver_app_enable_route_trip"/>
                             </group><group string="حماية الجهاز" col="2"><field name="driver_app_single_device"/>
+                            <field name="driver_app_device_proof_required"/>
                         </group></group>
                         <group string="سياسات الفترات" col="2">
                             <field name="driver_app_period_policy"/>
