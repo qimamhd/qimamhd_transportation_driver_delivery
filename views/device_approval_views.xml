@@ -32,7 +32,7 @@
   <field name="name">trnsp.driver.activation.display.form</field>
   <field name="model">trnsp.driver.activation.display</field>
   <field name="arch" type="xml"><form string="رمز تفعيل مؤقت"><group>
-   <label string="انسخ الرمز الآن؛ لن يظهر مرة أخرى. تنتهي صلاحيته بعد 5 دقائق."/>
+   <div class="text-muted">انسخ الرمز الآن؛ لن يظهر مرة أخرى. تنتهي صلاحيته بعد 5 دقائق.</div>
    <field name="code" readonly="1"/>
   </group><footer><button string="إغلاق" special="cancel" class="btn-primary"/></footer></form></field>
  </record>
