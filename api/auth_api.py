@@ -98,6 +98,8 @@ class DriverAppAuthAPI(http.Controller):
                 status=401,
             )
 
+        # Authenticate the device before any binding side effect. Otherwise a
+        # failed proof can bind an unapproved ID and lock out the real device.
         if driver.company_id and driver.company_id.driver_app_single_device:
             if not device_id or len(device_id) > 128:
                 return error(
@@ -105,6 +107,14 @@ class DriverAppAuthAPI(http.Controller):
                     'تعذر التحقق من هوية هذا الجهاز. حدّث التطبيق ثم حاول مرة أخرى.',
                     status=400,
                 )
+
+        proof_error = require_signed_device_request(
+            driver, candidate_device_id=device_id
+        )
+        if proof_error:
+            return proof_error
+
+        if driver.company_id and driver.company_id.driver_app_single_device:
             allowed, _newly_bound = driver.sudo().check_or_bind_app_device(
                 device_id, device_name=device_name
             )
@@ -114,10 +124,6 @@ class DriverAppAuthAPI(http.Controller):
                     'هذا الحساب مرتبط بجهاز آخر. يرجى التواصل مع المسؤول لتغيير الجهاز المعتمد.',
                     status=403,
                 )
-
-        proof_error = require_signed_device_request(driver)
-        if proof_error:
-            return proof_error
 
         driver.sudo().write({
             'app_failed_attempts': 0,

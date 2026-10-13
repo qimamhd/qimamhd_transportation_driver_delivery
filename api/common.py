@@ -107,7 +107,7 @@ def token_hash(token):
     return hashlib.sha256((token or '').encode('utf-8')).hexdigest()
 
 
-def require_signed_device_request(driver, bearer=''):
+def require_signed_device_request(driver, bearer='', candidate_device_id=None):
     """Opt-in Ed25519 proof for each protected request; fail closed when enabled.
 
     Signed UTF-8 message is the newline-delimited string:
@@ -133,10 +133,14 @@ def require_signed_device_request(driver, bearer=''):
     if abs(int(time.time()) - int(timestamp_text)) > 90:
         return error('DEVICE_PROOF_EXPIRED', 'انتهت صلاحية إثبات الجهاز.', status=403)
     approval = request.env['trnsp.driver.device.approval'].sudo().browse(int(approval_text)).exists()
+    # On password login the device is not bound yet. Verify the signed,
+    # activated approval against the submitted device ID before binding.
+    expected_device_id = (candidate_device_id if candidate_device_id is not None
+                          else driver.app_device_id)
     if (not approval or approval.state != 'approved' or not approval.activation_used_at
             or not approval.credential_hash or approval.database_name != request.db
             or approval.company_id.id != company.id
-            or not driver.app_device_id or approval.device_id != driver.app_device_id):
+            or not expected_device_id or approval.device_id != expected_device_id):
         return error('DEVICE_NOT_APPROVED', 'الجهاز غير معتمد.', status=403)
     body = request.httprequest.get_data(cache=True)
     if len(body) > 2 * 1024 * 1024:
