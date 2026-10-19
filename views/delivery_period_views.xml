@@ -102,6 +102,6 @@
             <field name="context">{}</field>
         </record>
 
-        <menuitem id="menu_trnsp_driver_delivery_period" name="إدارة فترات التوصيل" parent="qimamhd_transportation_v2_13.transportation_entry_menu" action="action_trnsp_driver_delivery_period" sequence="74" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"/>
+        <menuitem id="menu_trnsp_driver_delivery_period" name="إدارة فترات التوصيل" parent="qimamhd_transportation_v2_13.transportation_setup_menu" action="action_trnsp_driver_delivery_period" sequence="74" groups="qimamhd_transportation_driver_delivery.group_driver_request_manager"/>
     </data>
 </odoo>
