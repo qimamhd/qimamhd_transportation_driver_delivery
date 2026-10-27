@@ -1240,7 +1240,7 @@ class StoreDriverRequestLine(models.Model):
                     '<button type="button" data-trip-action="left" title="تدوير يسار">↶ 90°</button>'
                     '<button type="button" data-trip-action="right" title="تدوير يمين">↷ 90°</button>'
                     '<button type="button" data-trip-action="out" title="تصغير">−</button>'
-                    '<span class="qimam-trip-percent">100%</span>'
+                    '<span class="qimam-trip-percent">100%%</span>'
                     '<button type="button" data-trip-action="in" title="تكبير">+</button>'
                     '<button type="button" data-trip-action="fit" title="ملاءمة الشاشة">ملاءمة</button>'
                     '<button type="button" data-trip-action="reset" title="إعادة ضبط">إعادة ضبط</button>'
