@@ -1235,10 +1235,20 @@ class StoreDriverRequestLine(models.Model):
                     rec._name, rec.id
                 )
                 rec.trip_sheet_preview_html = (
-                    '<div style="text-align:center; padding:8px;">'
-                    '<img src="%s" alt="شيت الرحلة" '
-                    'style="display:block; max-width:100%%; max-height:70vh; width:auto; height:auto; margin:0 auto; object-fit:contain;"/>'
-                    '</div>' % image_url
+                    '<div class="qimam-trip-viewer" dir="ltr">'
+                    '<div class="qimam-trip-tools" role="toolbar" aria-label="أدوات معاينة شيت الرحلة">'
+                    '<button type="button" data-trip-action="left" title="تدوير يسار">↶ 90°</button>'
+                    '<button type="button" data-trip-action="right" title="تدوير يمين">↷ 90°</button>'
+                    '<button type="button" data-trip-action="out" title="تصغير">−</button>'
+                    '<span class="qimam-trip-percent">100%</span>'
+                    '<button type="button" data-trip-action="in" title="تكبير">+</button>'
+                    '<button type="button" data-trip-action="fit" title="ملاءمة الشاشة">ملاءمة</button>'
+                    '<button type="button" data-trip-action="reset" title="إعادة ضبط">إعادة ضبط</button>'
+                    '<button type="button" data-trip-action="fullscreen" title="ملء الشاشة">⛶</button>'
+                    '</div>'
+                    '<div class="qimam-trip-stage" aria-label="اسحب الصورة للتحريك عند التكبير">'
+                    '<img class="qimam-trip-image" src="%s" alt="شيت الرحلة" draggable="false"/>'
+                    '</div></div>' % image_url
                 )
             else:
                 rec.trip_sheet_preview_html = (
