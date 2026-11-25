@@ -28,6 +28,18 @@ from .common import (
 )
 
 
+def _driver_today(driver):
+    """Today's date in the driver's company timezone (server clock, not device).
+
+    Matches the date used when a delivery is created, so period defaults and
+    the future-period check agree with the batch the delivery was saved in.
+    """
+    company = driver.company_id.sudo() if driver and driver.company_id else False
+    if company:
+        return company._driver_app_local_now().date()
+    return fields.Date.today()
+
+
 class DriverAppDeliveryAPI(http.Controller):
 
     @staticmethod
@@ -754,7 +766,7 @@ class DriverAppDeliveryAPI(http.Controller):
         batches = request.env['trnsp.store.driver.request.batch'].sudo().search(
             domain, order='year desc, month_name desc, id desc'
         )
-        today = fields.Date.today()
+        today = _driver_today(driver)
         counts_map = self._period_counts(batches.ids)
         periods = [
             self._batch_summary(batch, today, counts_map.get(batch.id))
@@ -907,7 +919,7 @@ class DriverAppDeliveryAPI(http.Controller):
             return response
         driver, session = auth
 
-        today = fields.Date.today()
+        today = _driver_today(driver)
         month, year = self._validate_period(month or today.month, year or today.year)
         if not month:
             return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
@@ -1003,7 +1015,7 @@ class DriverAppDeliveryAPI(http.Controller):
             return response
         driver, session = auth
 
-        today = fields.Date.today()
+        today = _driver_today(driver)
         month, year = self._validate_period(month or today.month, year or today.year)
         if not month:
             return error('INVALID_PERIOD', 'الشهر أو السنة غير صحيح.')
@@ -1121,7 +1133,7 @@ class DriverAppDeliveryAPI(http.Controller):
             return response
         driver, session = auth
 
-        today = fields.Date.today()
+        today = _driver_today(driver)
         try:
             month = int(month or today.month)
             year = int(year or today.year)
@@ -1178,7 +1190,7 @@ class DriverAppDeliveryAPI(http.Controller):
             )
         data = read_json_body()
 
-        today = fields.Date.today()
+        today = _driver_today(driver)
         try:
             month = int(data.get('month') or today.month)
             year = int(data.get('year') or today.year)
