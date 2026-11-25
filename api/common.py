@@ -65,6 +65,21 @@ def error(code, message, status=400, details=None):
     return json_response(payload, status=status)
 
 
+def exception_message(exc):
+    """Return the plain user-facing text of an Odoo exception.
+
+    In Odoo 13, ``str(ValidationError(msg))`` returns the tuple repr
+    ``"('msg', None)"``, which the app would show verbatim to the driver.
+    """
+    name = getattr(exc, 'name', None)
+    if isinstance(name, str) and name.strip():
+        return name
+    args = getattr(exc, 'args', None) or ()
+    if args and isinstance(args[0], str) and args[0].strip():
+        return args[0]
+    return str(exc)
+
+
 def read_json_body():
     # For Odoo type='json', clients send JSON-RPC:
     # {"jsonrpc":"2.0","params":{...}}. Odoo exposes params to the

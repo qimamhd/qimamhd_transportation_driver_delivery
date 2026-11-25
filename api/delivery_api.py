@@ -19,6 +19,7 @@ from .common import (
     company_domain,
     driver_branch_id,
     error,
+    exception_message,
     float_value,
     int_value,
     ok,
@@ -688,7 +689,7 @@ class DriverAppDeliveryAPI(http.Controller):
                 status=409,
             )
         except ValidationError as exc:
-            return error('VALIDATION_ERROR', str(exc), status=409)
+            return error('VALIDATION_ERROR', exception_message(exc), status=409)
         except Exception:
             # Keep technical internals out of the public API response.
             request.env.cr.rollback()
@@ -1221,7 +1222,7 @@ class DriverAppDeliveryAPI(http.Controller):
         try:
             batch.action_mark_done()
         except ValidationError as exc:
-            return error('VALIDATION_ERROR', str(exc), status=409)
+            return error('VALIDATION_ERROR', exception_message(exc), status=409)
 
         return ok({
             'batch_id': batch.id,

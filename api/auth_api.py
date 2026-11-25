@@ -9,6 +9,7 @@ from .common import (
     authenticate_driver,
     require_signed_device_request,
     error,
+    exception_message,
     ok,
     read_json_body,
     bearer_token,
@@ -215,7 +216,7 @@ class DriverAppAuthAPI(http.Controller):
             # credential values.
             from odoo.exceptions import ValidationError
             if isinstance(exc, ValidationError):
-                return error('PASSWORD_CHANGE_INVALID', str(exc), status=400)
+                return error('PASSWORD_CHANGE_INVALID', exception_message(exc), status=400)
             request.env.cr.rollback()
             return error(
                 'PASSWORD_CHANGE_FAILED',
