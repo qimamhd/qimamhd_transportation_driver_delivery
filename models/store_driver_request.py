@@ -1034,6 +1034,11 @@ class StoreDriverRequestLine(models.Model):
         copy=False,
         readonly=True
     )
+    batch_state = fields.Selection(
+        related='batch_id.state',
+        string='حالة الملف',
+        readonly=True,
+    )
     trip_sheet_view_html = fields.Html(
         string='شيت الرحلة',
         compute='_compute_trip_sheet_view_html',
@@ -2034,6 +2039,18 @@ class StoreDriverRequestLine(models.Model):
         if 'entry_source' in vals:
             raise ValidationError(_('لا يمكن تعديل مصدر التوصيلة.'))
 
+        trip_sheet_before = {}
+        if 'trip_sheet_image' in vals:
+            for rec in self:
+                had_image = bool(rec.trip_sheet_image)
+                # Adding to an empty line is always allowed; removing or
+                # replacing an existing sheet only before review starts.
+                if had_image and rec.batch_id.state not in ('draft', 'done'):
+                    raise ValidationError(
+                        _('لا يمكن حذف أو استبدال صورة شيت الرحلة بعد بدء المراجعة.')
+                    )
+                trip_sheet_before[rec.id] = had_image
+
         if {'driver_latitude', 'driver_longitude'}.intersection(vals.keys()):
             if self.filtered(lambda rec: rec.entry_source == 'app'):
                 raise ValidationError(
@@ -2119,6 +2136,20 @@ class StoreDriverRequestLine(models.Model):
         if gps_fields.intersection(vals.keys()):
             self._load_destination_gps()
             self._calculate_gps()
+
+        if trip_sheet_before:
+            for rec in self:
+                had_image = trip_sheet_before.get(rec.id)
+                has_image = bool(vals.get('trip_sheet_image'))
+                if had_image and has_image:
+                    body = _('تم استبدال صورة شيت الرحلة للتوصيلة رقم %s.') % rec.id
+                elif has_image:
+                    body = _('تمت إضافة صورة شيت الرحلة للتوصيلة رقم %s.') % rec.id
+                elif had_image:
+                    body = _('تم حذف صورة شيت الرحلة من التوصيلة رقم %s.') % rec.id
+                else:
+                    continue
+                rec.batch_id.message_post(body=body)
 
         return result
 

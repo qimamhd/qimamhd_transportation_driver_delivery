@@ -137,11 +137,12 @@
                         <group>
                             <field name="trip_sheet_image_name" string="اسم المرفق" readonly="1"/>
                             <field name="trip_sheet_image" invisible="1"/>
+                            <field name="batch_state" invisible="1"/>
                         </group>
                         <field name="trip_sheet_preview_html" widget="html" readonly="1" nolabel="1"/>
                     </sheet>
                     <footer>
-                        <button name="action_delete_trip_sheet_attachment" string="حذف المرفق" type="object" class="btn-secondary" confirm="هل تريد حذف المرفق من هذه التوصيلة؟" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':[('trip_sheet_image','=',False)]}"/>
+                        <button name="action_delete_trip_sheet_attachment" string="حذف المرفق" type="object" class="btn-secondary" confirm="هل تريد حذف المرفق من هذه التوصيلة؟" groups="qimamhd_transportation_driver_delivery.group_driver_request_reviewer" attrs="{'invisible':['|',('trip_sheet_image','=',False),('batch_state','not in',['draft','done'])]}"/>
                         <button string="إغلاق" special="cancel" class="btn-primary"/>
                     </footer>
                 </form>
