@@ -51,12 +51,30 @@ class DriverAppDeliveryAPI(http.Controller):
             'name': record.display_name or '',
         }
 
+    @staticmethod
+    def _trip_sheet_line_ids(lines):
+        """Ids of lines that have a trip sheet image, without loading the images.
+
+        trip_sheet_image is stored as an ir.attachment (attachment=True); reading
+        the field loads every file. One attachment search answers 'has image?'.
+        """
+        if not lines:
+            return set()
+        attachments = request.env['ir.attachment'].sudo().search_read([
+            ('res_model', '=', lines._name),
+            ('res_field', '=', 'trip_sheet_image'),
+            ('res_id', 'in', lines.ids),
+        ], ['res_id'])
+        return {att['res_id'] for att in attachments}
+
     @classmethod
-    def _serialize_batch_line(cls, line):
+    def _serialize_batch_line(cls, line, image_line_ids=None):
+        if image_line_ids is None:
+            image_line_ids = cls._trip_sheet_line_ids(line)
         return {
             'id': line.id,
             'mobile_uuid': line.mobile_uuid or '',
-            'has_trip_sheet_image': bool(line.trip_sheet_image),
+            'has_trip_sheet_image': line.id in image_line_ids,
             'request_date': fields.Date.to_string(line.request_date) if line.request_date else None,
             'request_time': line.request_time or '',
             'car': cls._many2one_value(line.product_car_id),
@@ -983,6 +1001,7 @@ class DriverAppDeliveryAPI(http.Controller):
             offset=offset,
         )
         returned = len(lines)
+        image_line_ids = self._trip_sheet_line_ids(lines)
         return ok({
             'batch_id': batch.id,
             'batch_name': batch.name,
@@ -994,7 +1013,7 @@ class DriverAppDeliveryAPI(http.Controller):
             'total_count': total_count,
             'returned_count': returned,
             'has_more': offset + returned < total_count,
-            'lines': [self._serialize_batch_line(line) for line in lines],
+            'lines': [self._serialize_batch_line(line, image_line_ids) for line in lines],
         })
 
     @http.route(
@@ -1158,6 +1177,7 @@ class DriverAppDeliveryAPI(http.Controller):
             line.request_time or '',
             line.id,
         ))
+        image_line_ids = self._trip_sheet_line_ids(lines)
 
         return ok({
             'id': batch.id,
@@ -1171,7 +1191,7 @@ class DriverAppDeliveryAPI(http.Controller):
             'pending_count': batch.pending_count,
             'accepted_count': batch.accepted_count,
             'rejected_count': batch.rejected_count,
-            'lines': [self._serialize_batch_line(line) for line in lines],
+            'lines': [self._serialize_batch_line(line, image_line_ids) for line in lines],
         })
 
     @http.route(
