@@ -1004,6 +1004,15 @@ class StoreDriverRequestLine(models.Model):
         default=lambda self: str(uuid.uuid4()),
         index=True
     )
+    # No field default on purpose: existing rows stay empty (unknown origin).
+    # create() sets 'manual' unless the API passes 'app'.
+    entry_source = fields.Selection(
+        [('app', 'تطبيق'), ('manual', 'يدوي')],
+        string='المصدر',
+        copy=False,
+        readonly=True,
+        index=True,
+    )
     request_date = fields.Date(
         string='التاريخ',
         required=True,
@@ -1956,6 +1965,8 @@ class StoreDriverRequestLine(models.Model):
 
     @api.model
     def create(self, vals):
+        if vals.get('entry_source') not in ('app', 'manual'):
+            vals['entry_source'] = 'manual'
         if vals.get('request_time'):
             vals['request_time'] = self._normalize_request_time_value(vals['request_time'])
 
@@ -2019,6 +2030,15 @@ class StoreDriverRequestLine(models.Model):
             'driver_longitude',
             'mobile_uuid',
         }
+
+        if 'entry_source' in vals:
+            raise ValidationError(_('لا يمكن تعديل مصدر التوصيلة.'))
+
+        if {'driver_latitude', 'driver_longitude'}.intersection(vals.keys()):
+            if self.filtered(lambda rec: rec.entry_source == 'app'):
+                raise ValidationError(
+                    _('لا يمكن تعديل إحداثيات السائق في توصيلة مسجّلة من التطبيق.')
+                )
 
         if protected_fields.intersection(vals.keys()):
             for rec in self:

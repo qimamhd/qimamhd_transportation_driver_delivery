@@ -72,6 +72,7 @@
                                     <tree editable="bottom" default_order="request_date desc, request_time desc">
                                         <field name="company_id" invisible="1"/>
                                         <field name="mobile_uuid" optional="hide" readonly="1"/>
+                                        <field name="entry_source" optional="show" readonly="1"/>
                                         <field name="request_date" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="request_time" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
                                         <field name="allowed_product_car_ids" invisible="1"/>
@@ -81,8 +82,8 @@
                                         <field name="destination_path_ids" invisible="1"/>
                                         <field name="destination_path_id" invisible="1"/>
                                         <field name="manual_destination_pricing_line_id" string="الوجهة" domain="[('header_id.source_path_id','=',source_path_id)]" context="{'driver_app_destination_picker': True}" attrs="{'readonly':[('parent.state','!=','draft')]}" options="{'no_quick_create':True,'no_create_edit':True,'no_create':True}"/>
-                                        <field name="driver_latitude" optional="hide" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
-                                        <field name="driver_longitude" optional="hide" attrs="{'readonly':[('parent.state','!=','draft')]}"/>
+                                        <field name="driver_latitude" optional="hide" attrs="{'readonly':['|',('parent.state','!=','draft'),('entry_source','=','app')]}"/>
+                                        <field name="driver_longitude" optional="hide" attrs="{'readonly':['|',('parent.state','!=','draft'),('entry_source','=','app')]}"/>
                                         <field name="destination_latitude" optional="hide" readonly="1"/>
                                         <field name="destination_longitude" optional="hide" readonly="1"/>
                                         <field name="allowed_radius" optional="hide" readonly="1"/>

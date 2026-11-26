@@ -653,6 +653,7 @@ class DriverAppDeliveryAPI(http.Controller):
         line_vals = {
             'batch_id': batch.id,
             'mobile_uuid': mobile_uuid,
+            'entry_source': 'app',
             'request_date': request_date,
             'request_time': request_time,
             'product_car_id': car.id,
