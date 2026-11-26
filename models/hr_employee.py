@@ -46,7 +46,7 @@ class HrEmployeeDriverApp(models.Model):
         default=False,
         copy=False,
         track_visibility='onchange',
-        help='يتحكم فقط في ظهور زر الأقفال في الصفحة الرئيسية لتطبيق السائق. الإعداد مخفي افتراضيًا.'
+        help='يتحكم في ظهور زر الأقفال في الصفحة الرئيسية لتطبيق السائق، والسيرفر يرفض طلب الإقفال إذا كان معطّلًا. الإعداد معطّل افتراضيًا.'
     )
 
     # Legacy field kept for database compatibility only.

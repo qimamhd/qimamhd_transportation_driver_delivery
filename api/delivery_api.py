@@ -1182,6 +1182,12 @@ class DriverAppDeliveryAPI(http.Controller):
         if response:
             return response
         driver, session = auth
+        if not driver.sudo().app_monthly_close_enabled:
+            return error(
+                'MONTHLY_CLOSE_DISABLED',
+                'إقفال الفترة غير مفعّل لحسابك. تواصل مع الإدارة.',
+                status=403,
+            )
         if request_payload_too_large(8 * 1024):
             return error(
                 'PAYLOAD_TOO_LARGE',
