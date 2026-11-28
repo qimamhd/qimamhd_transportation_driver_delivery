@@ -57,7 +57,9 @@ class DriverDeviceApproval(models.Model):
         """Rotate a short-lived activation code without changing device identity."""
         self.ensure_one()
         code = secrets.token_urlsafe(24)
-        self.write({
+        # Hash fields are admin-only (groups=base.group_system); callers have
+        # already checked the driver-app manager group.
+        self.sudo().write({
             'activation_hash': hashlib.sha256(code.encode('utf-8')).hexdigest(),
             'activation_expires_at': fields.Datetime.now() + timedelta(minutes=5),
             'failed_attempts': 0,
@@ -140,7 +142,7 @@ class DriverDeviceApproval(models.Model):
 
     def action_revoke(self):
         self._require_manager()
-        self.write({'state': 'revoked', 'activation_hash': False, 'credential_hash': False, 'proof_challenge_hash': False})
+        self.sudo().write({'state': 'revoked', 'activation_hash': False, 'credential_hash': False, 'proof_challenge_hash': False})
 
 
 class DriverActivationDisplay(models.TransientModel):
