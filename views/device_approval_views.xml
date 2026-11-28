@@ -4,7 +4,7 @@
   <field name="name">trnsp.driver.device.approval.tree</field>
   <field name="model">trnsp.driver.device.approval</field>
   <field name="arch" type="xml"><tree create="false" edit="false" delete="false">
-   <field name="create_date"/><field name="device_name"/><field name="device_id"/>
+   <field name="create_date"/><field name="employee_id"/><field name="match_code"/><field name="flow"/><field name="device_name"/><field name="device_id"/>
    <field name="database_name"/><field name="server_origin"/><field name="company_id"/><field name="state"/>
   </tree></field>
  </record>
@@ -13,15 +13,24 @@
   <field name="model">trnsp.driver.device.approval</field>
   <field name="arch" type="xml"><form create="false" edit="false" delete="false">
    <header>
-    <button name="action_approve" string="موافقة وإصدار رمز" type="object" class="oe_highlight" attrs="{'invisible':[('state','!=','pending')]}"/>
+    <button name="action_approve" string="موافقة وإصدار رمز" type="object" class="oe_highlight" attrs="{'invisible':['|',('state','!=','pending'),('flow','=','pairing')]}"/>
+    <button name="action_approve" string="الرمز مطابق - موافقة" type="object" class="oe_highlight"
+            confirm="هل الرمز الظاهر في جوال السائق مطابق لرمز المطابقة هنا؟ الموافقة تلغي جهاز السائق السابق."
+            attrs="{'invisible':['|',('state','!=','pending'),('flow','!=','pairing')]}"/>
     <button name="action_reissue_activation" string="إعادة إصدار رمز التفعيل" type="object"
             class="oe_highlight"
-            attrs="{'invisible':['|',('state','!=','approved'),('activation_used_at','!=',False)]}"/>
+            attrs="{'invisible':['|','|',('state','!=','approved'),('activation_used_at','!=',False),('flow','=','pairing')]}"/>
     <button name="action_reject" string="رفض" type="object" attrs="{'invisible':[('state','!=','pending')]}"/>
     <button name="action_revoke" string="إلغاء الاعتماد" type="object" attrs="{'invisible':[('state','not in',['approved'])]}"/>
     <field name="state" widget="statusbar" statusbar_visible="pending,approved,rejected,revoked"/>
    </header>
-   <sheet><group><group>
+   <sheet>
+    <div attrs="{'invisible':[('flow','!=','pairing')]}" class="alert alert-info" role="alert">
+     طابِق رمز المطابقة مع الرمز الظاهر في جوال السائق قبل الموافقة.
+     <h1><field name="match_code" readonly="1"/></h1>
+    </div>
+    <group><group>
+    <field name="flow"/><field name="employee_id"/>
     <field name="company_id"/><field name="device_name"/><field name="device_id"/>
     <field name="database_name"/><field name="server_origin"/>
    </group><group>

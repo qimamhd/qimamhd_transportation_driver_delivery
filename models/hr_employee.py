@@ -5,7 +5,7 @@ import re
 from passlib.context import CryptContext
 
 from odoo import api, fields, models, _
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 
 _APP_PASSWORD_CONTEXT = CryptContext(
@@ -363,6 +363,34 @@ class HrEmployeeDriverApp(models.Model):
                 'تم ربط جهاز تطبيق السائق تلقائياً أثناء تسجيل الدخول من التطبيق.'
             ))
         return True, newly_bound
+
+    def _bind_app_device_from_pairing(self, device_id, device_name=False):
+        """Bind a manager-approved device (match-code flow) and end access
+        from any other device of this driver."""
+        self.ensure_one()
+        device_id = str(device_id or '').strip()
+        if not device_id:
+            raise UserError(_('معرف الجهاز مفقود.'))
+        self.env.cr.execute('SELECT id FROM hr_employee WHERE id = %s FOR UPDATE', (self.id,))
+        old_device = (self.app_device_id or '').strip()
+        for model in ('trnsp.driver.app.session', 'trnsp.driver.biometric.credential'):
+            records = self.env[model].sudo().search([
+                ('employee_id', '=', self.id),
+                ('revoked', '=', False),
+                '|', ('device_id', '=', False), ('device_id', '!=', device_id),
+            ])
+            if records:
+                records.write({'revoked': True})
+        super(HrEmployeeDriverApp, self).write({
+            'app_device_id': device_id,
+            'app_device_name': str(device_name or '').strip()[:128] or 'Qimam Route Mobile',
+            'app_device_bound_at': fields.Datetime.now(),
+            'app_device_last_login_at': False,
+        })
+        self.message_post(body=_(
+            'تم اعتماد جهاز جديد لتطبيق السائق برمز المطابقة بواسطة: %s%s'
+        ) % (self.env.user.display_name, _(' (أُلغي الجهاز السابق)') if old_device and old_device != device_id else ''))
+        return True
 
     def action_unbind_app_device(self):
         """Manager-only device reset; revoke all active app access tokens."""

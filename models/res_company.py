@@ -70,6 +70,11 @@ class ResCompany(models.Model):
         help='لا تفعّل قبل تحديث تطبيقات السائقين واختبار توقيع كل طلب API.',
     )
 
+    driver_app_device_pairing_v2 = fields.Boolean(
+        string='تفعيل الجهاز برمز مطابقة (الآلية الجديدة)', default=False,
+        help='السائق يطلب التفعيل بكلمة المرور، والمدير يوافق بعد مطابقة الرمز المكوّن من 6 أرقام الظاهر في الجوال وفي Odoo. لا يحتاج رمز تفعيل طويل.',
+    )
+
     driver_app_single_device = fields.Boolean(
         string='تقييد السائق بجهاز واحد',
         default=False,

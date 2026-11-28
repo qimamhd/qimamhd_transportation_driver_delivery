@@ -146,7 +146,8 @@ def require_signed_device_request(driver, bearer='', candidate_device_id=None):
             or not re.fullmatch(r'[A-Za-z0-9_-]{80,100}={0,2}', signature)):
         return error('DEVICE_PROOF_REQUIRED', 'يلزم إثبات اعتماد الجهاز.', status=403)
     if abs(int(time.time()) - int(timestamp_text)) > 90:
-        return error('DEVICE_PROOF_EXPIRED', 'انتهت صلاحية إثبات الجهاز.', status=403)
+        return error('DEVICE_PROOF_EXPIRED', 'انتهت صلاحية إثبات الجهاز.', status=403,
+                     details={'server_time': int(time.time())})
     approval = request.env['trnsp.driver.device.approval'].sudo().browse(int(approval_text)).exists()
     # On password login the device is not bound yet. Verify the signed,
     # activated approval against the submitted device ID before binding.
