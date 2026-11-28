@@ -10,4 +10,14 @@
         <field name="numbercall">-1</field>
         <field name="active">True</field>
     </record>
+    <record id="ir_cron_driver_app_cleanup_records" model="ir.cron">
+        <field name="name">Driver App - Cleanup Old Proof Nonces and Sessions</field>
+        <field name="model_id" ref="model_trnsp_driver_device_proof_nonce"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_cleanup_driver_app_records()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="numbercall">-1</field>
+        <field name="active">True</field>
+    </record>
 </odoo>
